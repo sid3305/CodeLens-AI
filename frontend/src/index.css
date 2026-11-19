@@ -1,0 +1,178 @@
+
+@import "tailwindcss";
+
+:root {
+  font-family: Inter, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb, #C5C9D2) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb, #C5C9D2);
+  border-radius: 10px;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  min-width: 320px;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-blue);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: var(--selection-bg);
+}
+
+/* =====================================
+   LIGHT MODE — DEFAULT
+===================================== */
+
+.app-shell {
+  color-scheme: light;
+
+  --app-bg: #F7F6F2;
+  --sidebar-bg: #F0EFEA;
+  --panel-bg: #FFFFFF;
+  --surface: #F5F5F8;
+  --surface-hover: #ECEEF5;
+  --border: #E1E2E8;
+
+  --text-primary: #252A36;
+  --text-secondary: #606979;
+  --text-muted: #89909D;
+
+  --accent-blue: #536DD1;
+  --accent-teal: #329A7C;
+  --accent-orange: #CE873C;
+
+  --scroll-thumb: #C5C9D2;
+  --selection-bg: #6478C944;
+
+  /* Workspace-specific colours */
+  --overview-color: #536DD1;
+  --overview-bg: #E8EDFF;
+
+  --architecture-color: #8962C9;
+  --architecture-bg: #F0E9FF;
+
+  --dataflow-color: #329A7C;
+  --dataflow-bg: #E1F5EF;
+
+  --dependencies-color: #428CB9;
+  --dependencies-bg: #E4F2FC;
+
+  --issues-color: #D66D55;
+  --issues-bg: #FCE9E5;
+
+  --performance-color: #CE873C;
+  --performance-bg: #FFF0DD;
+
+  --documentation-color: #398DA8;
+  --documentation-bg: #E2F3F7;
+
+  --ai-color: #BD6594;
+  --ai-bg: #F9EAF2;
+
+  --reports-color: #6475B9;
+  --reports-bg: #E9ECFA;
+
+  --security-color: #31936C;
+  --security-bg: #E2F4E9;
+
+  background: var(--app-bg);
+}
+
+/* =====================================
+   DARK MODE
+===================================== */
+
+.app-shell[data-theme="dark"] {
+  color-scheme: dark;
+
+  --app-bg: #202633;
+  --sidebar-bg: #252D3C;
+  --panel-bg: #293344;
+  --surface: #323E51;
+  --surface-hover: #3D4B61;
+  --border: #414C5F;
+
+  --text-primary: #F0F1F8;
+  --text-secondary: #B8C1D2;
+  --text-muted: #8995A9;
+
+  --accent-blue: #A8B8FF;
+  --accent-teal: #83D9B8;
+  --accent-orange: #F3BD7C;
+
+  --scroll-thumb: #566176;
+  --selection-bg: #A8B8FF55;
+
+  --overview-color: #A8B8FF;
+  --overview-bg: #303B60;
+
+  --architecture-color: #C4A2F4;
+  --architecture-bg: #403354;
+
+  --dataflow-color: #83D9B8;
+  --dataflow-bg: #24463F;
+
+  --dependencies-color: #8CC9EB;
+  --dependencies-bg: #263F54;
+
+  --issues-color: #F19B87;
+  --issues-bg: #4B302F;
+
+  --performance-color: #F3BD7C;
+  --performance-bg: #4D3B2B;
+
+  --documentation-color: #82C9DD;
+  --documentation-bg: #24424D;
+
+  --ai-color: #F0A6C4;
+  --ai-bg: #493344;
+
+  --reports-color: #AAB9F1;
+  --reports-bg: #333D60;
+
+  --security-color: #83D9A8;
+  --security-bg: #264638;
+}
+
+.app-shell {
+  color: var(--text-primary);
+}

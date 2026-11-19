@@ -1,3 +1,4 @@
+
 # Environment variables and secrets
 .env
 .env.*
@@ -27,6 +28,21 @@ tmp/
 # Generated reports
 *_analysis_report.html
 *_analysis_report.json
+
+# Frontend - Node.js
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/coverage/
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# Frontend - build and debug files
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/pnpm-debug.log*
+frontend/.eslintcache
 
 # IDE and OS files
 .vscode/

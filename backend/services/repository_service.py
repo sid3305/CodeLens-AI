@@ -1,0 +1,312 @@
+
+import json
+import shutil
+from datetime import datetime, timezone
+from pathlib import Path
+from threading import Lock
+from urllib.parse import urlparse
+
+from fastapi import UploadFile
+
+from utils.file_handler import (
+    UPLOAD_DIR,
+    MAX_ARCHIVE_SIZE,
+    create_workspace,
+    extract_zip,
+    clone_github_repo,
+    get_code_files,
+)
+from utils.security import is_sensitive_file
+from utils.parser import read_file_content
+
+
+REGISTRY_FILE = Path(UPLOAD_DIR) / ".codelens_repositories.json"
+_registry_lock = Lock()
+
+
+def _load_registry():
+    """Load previously imported repositories."""
+
+    if not REGISTRY_FILE.exists():
+        return {}
+
+    try:
+        with REGISTRY_FILE.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+            return data if isinstance(data, dict) else {}
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _save_registry(registry):
+    """Persist repository metadata."""
+
+    REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    temporary_file = REGISTRY_FILE.with_suffix(".tmp")
+
+    with temporary_file.open("w", encoding="utf-8") as file:
+        json.dump(registry, file, indent=4)
+
+    temporary_file.replace(REGISTRY_FILE)
+
+
+def _register_repository(repo_id, name, source, repo_path):
+    """Save repository metadata and return its record."""
+
+    code_files = get_code_files(repo_path)
+
+    repository = {
+        "id": repo_id,
+        "name": name,
+        "source": source,
+        "path": str(Path(repo_path).resolve()),
+        "file_count": len(code_files),
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+    with _registry_lock:
+        registry = _load_registry()
+        registry[repo_id] = repository
+        _save_registry(registry)
+
+    return repository
+
+
+def list_repositories():
+    """Return all registered repositories."""
+
+    with _registry_lock:
+        registry = _load_registry()
+
+    valid_repositories = []
+
+    for repository in registry.values():
+        if Path(repository["path"]).is_dir():
+            valid_repositories.append(repository)
+
+    return valid_repositories
+
+
+def get_repository(repo_id):
+    """Retrieve one repository by its ID."""
+
+    with _registry_lock:
+        registry = _load_registry()
+
+    repository = registry.get(repo_id)
+
+    if not repository:
+        raise ValueError("Repository not found.")
+
+    repo_path = Path(repository["path"]).resolve()
+    upload_root = Path(UPLOAD_DIR).resolve()
+
+    try:
+        repo_path.relative_to(upload_root)
+    except ValueError:
+        raise ValueError("Invalid repository location.")
+
+    if not repo_path.is_dir():
+        raise ValueError("Repository directory no longer exists.")
+
+    return repository
+
+
+def _detect_project_root(extract_path):
+    """
+    Detect an unnecessary single parent directory
+    inside an extracted ZIP archive.
+    """
+
+    extract_path = Path(extract_path)
+
+    items = list(extract_path.iterdir())
+
+    # If the ZIP contains exactly one top-level directory
+    # and no files at its root, use that directory.
+    if (
+        len(items) == 1
+        and items[0].is_dir()
+        and not items[0].is_symlink()
+    ):
+        return items[0]
+
+    return extract_path
+
+
+async def import_zip_repository(upload: UploadFile):
+    """Import and extract a ZIP repository."""
+
+    if not upload.filename or Path(upload.filename).suffix.lower() != ".zip":
+        raise ValueError("Please upload a valid ZIP archive.")
+
+    workspace = Path(create_workspace())
+
+    try:
+        archive_content = await upload.read(MAX_ARCHIVE_SIZE + 1)
+
+        if not archive_content:
+            raise ValueError("Uploaded ZIP file is empty.")
+
+        if len(archive_content) > MAX_ARCHIVE_SIZE:
+            raise ValueError("ZIP archive exceeds the maximum allowed size.")
+
+        archive_path = workspace / "repository_upload.zip"
+        archive_path.write_bytes(archive_content)
+
+        extracted_path = Path(extract_zip(str(archive_path)))
+
+        repo_path = _detect_project_root(extracted_path)
+
+        repository_name = repo_path.name
+
+        archive_path.unlink(missing_ok=True)
+
+        return _register_repository(
+            repo_id=workspace.name,
+            name=repository_name,
+            source="zip",
+            repo_path=repo_path,
+        )
+
+    except Exception:
+        shutil.rmtree(workspace, ignore_errors=True)
+        raise
+
+    finally:
+        await upload.close()
+
+
+def import_github_repository(repo_url):
+    """Clone and register a GitHub repository."""
+
+    repo_path = Path(clone_github_repo(repo_url)).resolve()
+
+    workspace = repo_path.parent
+
+    parsed_url = urlparse(repo_url)
+    repository_name = parsed_url.path.rstrip("/").split("/")[-1]
+
+    if repository_name.lower().endswith(".git"):
+        repository_name = repository_name[:-4]
+
+    try:
+        return _register_repository(
+            repo_id=workspace.name,
+            name=repository_name,
+            source="github",
+            repo_path=repo_path,
+        )
+
+    except Exception:
+        shutil.rmtree(workspace, ignore_errors=True)
+        raise
+
+def list_repository_files(repo_id):
+    """Return repository files using relative paths."""
+
+    repository = get_repository(repo_id)
+    repo_path = Path(repository["path"])
+
+    absolute_files = get_code_files(str(repo_path))
+
+    files = []
+
+    for file_path in absolute_files:
+        path = Path(file_path)
+        relative_path = path.relative_to(repo_path)
+
+        files.append({
+            "path": relative_path.as_posix(),
+            "name": path.name,
+            "extension": path.suffix.lower(),
+        })
+
+    return {
+        "repository_id": repo_id,
+        "total_files": len(files),
+        "files": files,
+    }
+
+
+def get_file_content(repo_id, relative_path):
+    """Safely retrieve a file from a repository."""
+
+    repository = get_repository(repo_id)
+    repo_path = Path(repository["path"]).resolve()
+
+    requested_path = Path(relative_path)
+
+    if requested_path.is_absolute() or ".." in requested_path.parts:
+        raise ValueError("Invalid file path.")
+
+    file_path = (repo_path / requested_path).resolve()
+
+    try:
+        file_path.relative_to(repo_path)
+    except ValueError:
+        raise ValueError("File is outside the repository.")
+
+    if not file_path.is_file():
+        raise ValueError("File not found.")
+
+    if is_sensitive_file(file_path):
+        raise ValueError("Sensitive files cannot be accessed.")
+
+    if file_path.stat().st_size > 1024 * 1024:
+        raise ValueError("File exceeds the maximum allowed size.")
+
+    content = read_file_content(str(file_path))
+
+    if content.startswith("Error reading file:"):
+        raise ValueError("Unable to read this file.")
+
+    return {
+        "repository_id": repo_id,
+        "path": file_path.relative_to(repo_path).as_posix(),
+        "content": content,
+    }
+
+def delete_repository(repo_id: str):
+    """Delete a repository's workspace and registry entry safely."""
+
+    upload_root = Path(UPLOAD_DIR).resolve()
+    workspace_path = upload_root / repo_id
+
+    with _registry_lock:
+        registry = _load_registry()
+        repository = registry.get(repo_id)
+
+        if not repository:
+            raise ValueError("Repository not found.")
+
+        # Only allow deletion of a direct child of uploads/.
+        if (
+            workspace_path.is_symlink()
+            or workspace_path.resolve().parent != upload_root
+        ):
+            raise ValueError("Invalid repository workspace.")
+
+        workspace_path = workspace_path.resolve()
+
+        # Confirm the registered repository is inside this workspace.
+        repo_path = Path(repository["path"]).resolve()
+
+        try:
+            repo_path.relative_to(workspace_path)
+        except ValueError:
+            raise ValueError("Invalid repository location.")
+
+        # Delete the complete workspace, including analysis results.
+        if workspace_path.exists():
+            shutil.rmtree(workspace_path)
+
+        # Remove the repository from the persistent registry.
+        registry.pop(repo_id)
+        _save_registry(registry)
+
+    return {
+        "message": "Repository deleted successfully.",
+        "repository_id": repo_id,
+    }
