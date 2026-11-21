@@ -79,3 +79,77 @@ export interface AnalysisResponse {
   tool_status: Record<string, AnalyzerStatus>
   findings: Finding[]
 }
+
+export interface SummaryResponse {
+  repository_id: string
+  repository_name: string
+  summary: string
+  generated_at: string
+  truncated: boolean
+}
+
+export interface ExternalDependency {
+  name: string
+  source_files: string[]
+  import_count: number
+  language: string
+  version: string | null
+  is_dev_dependency: boolean
+}
+
+export interface ModuleDependency {
+  source_module: string
+  target_module: string
+  import_type: string
+  imports: string[]
+  edge_count: number
+}
+
+export interface CircularDependency {
+  cycle: string[]
+  cycle_type: string
+  severity: string
+  description: string
+}
+
+export interface LanguageBreakdown {
+  files: number
+  internal_deps: number
+  external_deps: number
+}
+
+export interface DependenciesGraphData {
+  nodes: any[]
+  edges: any[]
+  totalNodes: number
+  totalEdges: number
+  showingNodes: number
+  showingEdges: number
+  folders: string[]
+  moduleGraph?: {
+    nodes: any[]
+    edges: any[]
+  }
+}
+
+export interface DependenciesStats {
+  total_imports: number
+  total_calls: number
+  circular_import_count: number
+  dead_code_count: number
+  hotspot_count: number
+  file_count: number
+}
+
+export interface DependenciesAnalysisResponse {
+  repository_id: string
+  total_internal_modules: number
+  total_external_dependencies: number
+  circular_dependencies: CircularDependency[]
+  module_dependencies: ModuleDependency[]
+  external_dependencies: ExternalDependency[]
+  dependency_graph_data: DependenciesGraphData
+  language_breakdown: Record<string, LanguageBreakdown>
+  stats: DependenciesStats
+  generated_at: string
+}

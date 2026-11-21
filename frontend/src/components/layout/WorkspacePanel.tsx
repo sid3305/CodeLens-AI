@@ -8,7 +8,6 @@ import {
   Code2,
   Files,
   Activity,
-  Play,
   AlertTriangle,
   CheckCircle2,
   XCircle,
@@ -18,6 +17,10 @@ import {
   ChevronDown,
   ExternalLink,
   SlidersHorizontal,
+  Brain,
+  Sparkles,
+  Zap,
+  Wand2,
 } from 'lucide-react'
 
 import { useEffect, useRef, useState } from 'react'
@@ -29,9 +32,12 @@ import type {
   RepositoryFile,
   AnalysisResponse,
   Finding,
+  SummaryResponse,
 } from '../../types'
 
 import { api } from '../../services/api'
+import DependenciesPanel from './DependenciesPanel'
+import MarkdownContent from './MarkdownContent'
 
 interface WorkspacePanelProps {
   activeSection: WorkspaceSection
@@ -70,6 +76,7 @@ function getLanguageCount(files: RepositoryFile[]) {
   ).size
 }
 
+// Format AI-generated content with markdown-like parsing
 function StatCard({
   icon,
   label,
@@ -296,17 +303,55 @@ export default function WorkspacePanel({
   const [findingSearch, setFindingSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('All')
   const [analyzerFilter, setAnalyzerFilter] = useState('All')
+  const [aiSummary, setAiSummary] = useState<SummaryResponse | null>(null)
+  const [generatingSummary, setGeneratingSummary] = useState(false)
+  const [fileExplanation, setFileExplanation] = useState<string | null>(null)
+  const [explainingFile, setExplainingFile] = useState(false)
+
+  // Auto-generate AI summary when repository loads
+  useEffect(() => {
+    if (repository && !aiSummary && !generatingSummary) {
+      const generate = async () => {
+        setGeneratingSummary(true)
+        try {
+          const summary = await api.generateSummary(repository.id)
+          setAiSummary(summary)
+        } catch (error) {
+          console.error('Failed to generate summary:', error)
+        } finally {
+          setGeneratingSummary(false)
+        }
+      }
+      generate()
+    }
+  }, [repository, aiSummary, generatingSummary])
 
   const handleGitHubImport = async () => {
-  if (!githubUrl.trim()) return
-  
-  await onImportGitHub(githubUrl.trim())
-  setGithubUrl('')
-  setShowGithubInput(false)
+    if (!githubUrl.trim()) return
+
+    await onImportGitHub(githubUrl.trim())
+    setGithubUrl('')
+    setShowGithubInput(false)
   }
+
+  const handleExplainFile = async () => {
+    if (!repository || !selectedFilePath || !selectedFileContent) return
+
+    setExplainingFile(true)
+    try {
+      const response = await api.explainFile(repository.id, selectedFilePath)
+      setFileExplanation(response.explanation)
+    } catch (error) {
+      console.error('Failed to explain file:', error)
+    } finally {
+      setExplainingFile(false)
+    }
+  }
+
   const isOverview = activeSection === 'overview'
   const isIssues = activeSection === 'issues'
   const isFilePreview = activeSection === 'file-preview'
+  const isDependencies = activeSection === 'dependencies'
 
   const findings = analysis?.findings ?? []
   const severityCounts = analysis?.summary.severity_counts ?? {}
@@ -382,16 +427,21 @@ const filteredFindings = findings.filter((finding) => {
 
           {repository && (
             <button
-              className="primary-button"
+              className="primary-button run-analysis-btn"
               onClick={onRunAnalysis}
               disabled={analyzing}
             >
               {analyzing ? (
-                <RefreshCw size={16} className="spin" />
+                <>
+                  <RefreshCw size={16} className="spin" />
+                  Analyzing...
+                </>
               ) : (
-                <Play size={16} />
+                <>
+                  <Zap size={16} />
+                  Run Analysis
+                </>
               )}
-              {analyzing ? 'Analyzing...' : 'Run Analysis'}
             </button>
           )}
         </div>
@@ -517,15 +567,56 @@ const filteredFindings = findings.filter((finding) => {
               <div className="section-title-row">
                 <div>
                   <h2>Project Summary</h2>
-                  <p>Repository analysis overview</p>
+                  <p>AI-powered repository overview</p>
                 </div>
 
-                <span className="coming-label">
-                  {analysis ? 'Analysis completed' : 'Awaiting analysis'}
-                </span>
+                {generatingSummary && (
+                  <span className="generating-indicator">
+                    <RefreshCw size={14} className="spin" />
+                    Generating AI summary...
+                  </span>
+                )}
+
+                {aiSummary && (
+                  <span className="generated-indicator">
+                    <Sparkles size={14} />
+                    Generated {new Date(aiSummary.generated_at).toLocaleTimeString()}
+                    {aiSummary.truncated && ' · Truncated'}
+                  </span>
+                )}
               </div>
 
-              {analysis ? (
+              {aiSummary ? (
+                <div className="ai-summary-content">
+                  <div className="ai-content-header">
+                    <div className="icon">
+                      <Brain size={18} />
+                    </div>
+                    <h3>AI Repository Summary</h3>
+                    <span className="meta">
+                      {aiSummary.truncated && 'Truncated'}
+                    </span>
+                  </div>
+                  <div className="ai-summary-text">
+                    <MarkdownContent content={aiSummary.summary} />
+                  </div>
+                  <button
+                    className="secondary-button regenerate-btn"
+                    onClick={() => {
+                      setAiSummary(null)
+                      setGeneratingSummary(true)
+                      api.generateSummary(repository!.id).then(s => {
+                        setAiSummary(s)
+                        setGeneratingSummary(false)
+                      }).catch(() => setGeneratingSummary(false))
+                    }}
+                    style={{ marginTop: '16px' }}
+                  >
+                    <RefreshCw size={14} />
+                    Regenerate Summary
+                  </button>
+                </div>
+              ) : analysis ? (
                 <div className="empty-content compact-empty">
                   <CheckCircle2 size={22} />
                   <h3>Static analysis completed</h3>
@@ -536,6 +627,9 @@ const filteredFindings = findings.filter((finding) => {
                     {analysis.summary.duplicates_removed} duplicate findings
                     were consolidated.
                   </p>
+                  <p style={{ marginTop: '12px', fontSize: '13px', opacity: 0.7 }}>
+                    Click "Generate AI Summary" for an architectural overview.
+                  </p>
                 </div>
               ) : (
                 <div className="empty-content">
@@ -544,6 +638,9 @@ const filteredFindings = findings.filter((finding) => {
                   <p>
                     Run Code Analysis to inspect your repository using
                     Ruff, Bandit, Semgrep and Gitleaks.
+                  </p>
+                  <p style={{ marginTop: '12px', fontSize: '13px', opacity: 0.7 }}>
+                    Then generate an AI summary for architectural insights.
                   </p>
                 </div>
               )}
@@ -759,6 +856,11 @@ const filteredFindings = findings.filter((finding) => {
       </>
     )}
   </>
+        ) : isDependencies ? (
+          <DependenciesPanel
+            repository={repository}
+            onRefresh={onRefresh}
+          />
         ) : isFilePreview && selectedFilePath ? (
   <section className="content-section">
     <div className="section-title-row">
@@ -771,6 +873,32 @@ const filteredFindings = findings.filter((finding) => {
           {selectedLine !== null && ` · Focused on line ${selectedLine}`}
         </p>
       </div>
+
+      {repository && selectedFileContent && !fileExplanation && !explainingFile && (
+        <button
+          className="primary-button"
+          onClick={handleExplainFile}
+          disabled={explainingFile}
+          style={{ marginLeft: 'auto' }}
+        >
+          <Sparkles size={16} />
+          {explainingFile ? 'Explaining...' : 'Explain This File'}
+        </button>
+      )}
+
+      {explainingFile && (
+        <span className="coming-label">
+          <RefreshCw size={14} className="spin" />
+          Generating explanation...
+        </span>
+      )}
+
+      {fileExplanation && (
+        <span className="coming-label">
+          <Sparkles size={14} />
+          Explanation generated
+        </span>
+      )}
     </div>
 
     {selectedFileContent === null ? (
@@ -778,31 +906,56 @@ const filteredFindings = findings.filter((finding) => {
         Loading file content...
       </div>
     ) : (
-      <div className="file-preview-container">
-        <pre className="file-preview-code">
-          {selectedFileContent.split('\n').map((line, index) => {
-            const lineNumber = index + 1
-            const isSelected = lineNumber === selectedLine
+      <>
+        <div className="file-preview-container">
+          <pre className="file-preview-code">
+            {selectedFileContent.split('\n').map((line, index) => {
+              const lineNumber = index + 1
+              const isSelected = lineNumber === selectedLine
 
-            return (
-              <div
-                key={lineNumber}
-                ref={isSelected ? selectedLineRef : null}
-                className={
-                  isSelected
-                    ? 'file-preview-line file-preview-line-highlighted'
-                    : 'file-preview-line'
-                }
-              >
-                <span className="file-preview-line-number">
-                  {lineNumber}
-                </span>
-                <code>{line || ' '}</code>
+              return (
+                <div
+                  key={lineNumber}
+                  ref={isSelected ? selectedLineRef : null}
+                  className={
+                    isSelected
+                      ? 'file-preview-line file-preview-line-highlighted'
+                      : 'file-preview-line'
+                  }
+                >
+                  <span className="file-preview-line-number">
+                    {lineNumber}
+                  </span>
+                  <code>{line || ' '}</code>
+                </div>
+              )
+            })}
+          </pre>
+        </div>
+
+        {fileExplanation && (
+          <div className="ai-explanation-section" style={{ marginTop: '24px' }}>
+            <div className="ai-content-header">
+              <div className="icon">
+                <Wand2 size={18} />
               </div>
-            )
-          })}
-        </pre>
-      </div>
+              <h3>AI File Explanation</h3>
+              <span className="meta">{selectedFilePath}</span>
+            </div>
+            <div className="ai-explanation-content">
+              <MarkdownContent content={fileExplanation} />
+            </div>
+            <button
+              className="secondary-button regenerate-btn"
+              onClick={handleExplainFile}
+              style={{ marginTop: '16px' }}
+            >
+              <RefreshCw size={14} />
+              Regenerate Explanation
+            </button>
+          </div>
+        )}
+      </>
     )}
   </section>
         ) : (

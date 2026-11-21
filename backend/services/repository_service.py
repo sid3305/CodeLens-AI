@@ -310,3 +310,32 @@ def delete_repository(repo_id: str):
         "message": "Repository deleted successfully.",
         "repository_id": repo_id,
     }
+
+
+def get_saved_repository_summary(repo_id: str):
+    """Retrieve a previously generated repository summary."""
+
+    with _registry_lock:
+        registry = _load_registry()
+
+    repository = registry.get(repo_id)
+
+    if not repository:
+        raise ValueError("Repository not found.")
+
+    return repository.get("ai_summary")
+
+
+def save_repository_summary(repo_id: str, summary_data: dict):
+    """Persist an AI-generated summary in the repository registry."""
+
+    with _registry_lock:
+        registry = _load_registry()
+
+        if repo_id not in registry:
+            raise ValueError("Repository not found.")
+
+        registry[repo_id]["ai_summary"] = summary_data
+        _save_registry(registry)
+
+    return summary_data

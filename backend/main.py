@@ -4,6 +4,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.routers import repositories
 from backend.routers import analysis
+from backend.routers import ai
+from backend.routers import dependencies
 
 
 app = FastAPI(
@@ -28,6 +30,8 @@ app.add_middleware(
 # Register API routers
 app.include_router(repositories.router)
 app.include_router(analysis.router)
+app.include_router(ai.router)
+app.include_router(dependencies.router)
 
 
 @app.get("/")

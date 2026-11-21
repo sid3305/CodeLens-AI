@@ -1,5 +1,5 @@
 
-const API_BASE_URL = 'http://127.0.0.1:8000/api'
+const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'}/api`
 
 export interface Repository {
   id: string
@@ -69,6 +69,88 @@ export interface AnalysisResponse {
   summary: AnalysisSummary
   tool_status: Record<string, AnalyzerStatus>
   findings: Finding[]
+}
+
+export interface SummaryResponse {
+  repository_id: string
+  repository_name: string
+  summary: string
+  generated_at: string
+  truncated: boolean
+}
+
+export interface ExplainResponse {
+  repository_id: string
+  file_path: string
+  explanation: string
+  generated_at: string
+  truncated: boolean
+}
+
+export interface ExternalDependency {
+  name: string
+  source_files: string[]
+  import_count: number
+  language: string
+  version: string | null
+  is_dev_dependency: boolean
+}
+
+export interface ModuleDependency {
+  source_module: string
+  target_module: string
+  import_type: string
+  imports: string[]
+  edge_count: number
+}
+
+export interface CircularDependency {
+  cycle: string[]
+  cycle_type: string
+  severity: string
+  description: string
+}
+
+export interface LanguageBreakdown {
+  files: number
+  internal_deps: number
+  external_deps: number
+}
+
+export interface DependenciesGraphData {
+  nodes: any[]
+  edges: any[]
+  totalNodes: number
+  totalEdges: number
+  showingNodes: number
+  showingEdges: number
+  folders: string[]
+  moduleGraph?: {
+    nodes: any[]
+    edges: any[]
+  }
+}
+
+export interface DependenciesStats {
+  total_imports: number
+  total_calls: number
+  circular_import_count: number
+  dead_code_count: number
+  hotspot_count: number
+  file_count: number
+}
+
+export interface DependenciesAnalysisResponse {
+  repository_id: string
+  total_internal_modules: number
+  total_external_dependencies: number
+  circular_dependencies: CircularDependency[]
+  module_dependencies: ModuleDependency[]
+  external_dependencies: ExternalDependency[]
+  dependency_graph_data: DependenciesGraphData
+  language_breakdown: Record<string, LanguageBreakdown>
+  stats: DependenciesStats
+  generated_at: string
 }
 
 async function request<T>(
@@ -143,4 +225,45 @@ export const api = {
     `/repositories/${encodeURIComponent(repoId)}`,
     { method: 'DELETE' },
   ),
+
+  generateSummary: (repoId: string) =>
+    request<SummaryResponse>(
+      `/repositories/${encodeURIComponent(repoId)}/summary`,
+      { method: 'POST' },
+    ),
+
+  explainFile: (repoId: string, filePath: string) =>
+    request<ExplainResponse>(
+      `/repositories/${encodeURIComponent(repoId)}/files/explain`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file_path: filePath }),
+      },
+    ),
+
+  getDependenciesAnalysis: (repoId: string, maxNodes = 200) =>
+    request<DependenciesAnalysisResponse>(
+      `/repositories/${encodeURIComponent(repoId)}/dependencies?max_nodes=${maxNodes}`,
+    ),
+
+  getCircularDependencies: (repoId: string) =>
+    request<{ repository_id: string; circular_dependencies: CircularDependency[]; count: number }>(
+      `/repositories/${encodeURIComponent(repoId)}/dependencies/circular`,
+    ),
+
+  getExternalDependencies: (repoId: string) =>
+    request<{ repository_id: string; external_dependencies: ExternalDependency[]; count: number }>(
+      `/repositories/${encodeURIComponent(repoId)}/dependencies/external`,
+    ),
+
+  getModuleDependencyGraph: (repoId: string) =>
+    request<{ repository_id: string; module_graph: DependenciesGraphData['moduleGraph']; module_count: number; dependency_count: number }>(
+      `/repositories/${encodeURIComponent(repoId)}/dependencies/module-graph`,
+    ),
+
+  getDependenciesStats: (repoId: string) =>
+    request<{ repository_id: string; stats: DependenciesStats }>(
+      `/repositories/${encodeURIComponent(repoId)}/dependencies/stats`,
+    ),
 }

@@ -1,3 +1,22 @@
-streamlit
+# --- Backend (FastAPI) ---
+fastapi
+uvicorn[standard]
+python-multipart
 python-dotenv
 groq
+
+# --- Static analysis tools (called by utils/*_analyzer.py) ---
+ruff
+bandit
+semgrep
+
+# --- Code Graph & Architecture Analysis ---
+tree-sitter
+tree-sitter-python
+tree-sitter-javascript
+tree-sitter-typescript
+networkx
+lizard
+
+# --- Legacy Streamlit UI (delete once the React app reaches parity) ---
+streamlit
