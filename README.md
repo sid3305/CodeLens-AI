@@ -403,35 +403,32 @@ python3 -m venv venv
 source venv/bin/activate
 ```
 
-Install Python dependencies:
+Install Python dependencies (works on Windows, macOS and Linux):
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 3. Install Static Analysis Tools
+This installs the baseline analyzers, **Ruff** and **Bandit**, which run natively on every platform.
 
-The project uses external command-line analyzers.
+### 3. Optional Analyzers (Semgrep, Gitleaks)
 
-Install the Python-based tools:
+Semgrep and Gitleaks add JavaScript/TypeScript security rules and secret detection. CodeLens AI runs without them, and the analysis report names any analyzer that is not installed.
 
-```bash
-pip install ruff bandit semgrep
-```
+| Platform | Semgrep | Gitleaks |
+|---|---|---|
+| Linux / macOS | `pip install -r requirements-analyzers.txt` | Install the binary from the [Gitleaks releases](https://github.com/gitleaks/gitleaks/releases) |
+| Windows (native) | Not available: Semgrep has no Windows build. Run the backend under WSL or Docker to use it. | Install the Windows binary from the [Gitleaks releases](https://github.com/gitleaks/gitleaks/releases) |
 
-Install Gitleaks separately using its official installation instructions:
+`requirements-analyzers.txt` is safe to install on Windows: Semgrep is skipped there.
 
-https://github.com/gitleaks/gitleaks
-
-Make sure the analyzer commands are available in your system PATH.
-
-Verify installations:
+Make sure the analyzer commands are on your `PATH`, then verify:
 
 ```bash
 ruff --version
 bandit --version
-semgrep --version
-gitleaks version
+semgrep --version    # optional
+gitleaks version     # optional
 ```
 
 ### 4. Frontend Setup

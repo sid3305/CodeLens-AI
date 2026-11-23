@@ -1,3 +1,7 @@
+# Core runtime. Installs on Windows, macOS and Linux.
+#   pip install -r requirements.txt
+# Optional analyzers (Semgrep, Gitleaks): see requirements-analyzers.txt.
+
 # --- Backend (FastAPI) ---
 fastapi
 uvicorn[standard]
@@ -5,18 +9,16 @@ python-multipart
 python-dotenv
 groq
 
-# --- Static analysis tools (called by utils/*_analyzer.py) ---
+# --- Baseline static analyzers (run natively on every platform) ---
 ruff
 bandit
-semgrep
 
-# --- Code Graph & Architecture Analysis ---
+# --- Code graph & dependency analysis ---
 tree-sitter
 tree-sitter-python
 tree-sitter-javascript
 tree-sitter-typescript
 networkx
-lizard
 
-# --- Legacy Streamlit UI (delete once the React app reaches parity) ---
+# --- Legacy Streamlit UI (removed in B9) ---
 streamlit

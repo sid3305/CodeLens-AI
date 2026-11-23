@@ -1,0 +1,14 @@
+# Optional analyzers. CodeLens AI works without them; the analysis report
+# lists any analyzer that is not installed.
+#
+# Semgrep has no native Windows build. On Windows, run the backend under
+# WSL or Docker to use it. The marker below makes this file safe to install
+# on Windows (Semgrep is simply skipped).
+#
+# Gitleaks is a standalone binary, not a Python package. Install it from
+# https://github.com/gitleaks/gitleaks/releases and make sure `gitleaks`
+# is on your PATH.
+#
+#   pip install -r requirements-analyzers.txt
+
+semgrep; sys_platform != "win32"
