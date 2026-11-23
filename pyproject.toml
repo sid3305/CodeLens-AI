@@ -5,7 +5,9 @@ requires-python = ">=3.10"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-p no:cacheprovider --ignore=tests/fixtures"
+# Timing tests depend on the machine: run them with  pytest -m perf
+addopts = "-p no:cacheprovider --ignore=tests/fixtures -m 'not perf'"
+markers = ["perf: timing budgets, machine-dependent; deselected by default (run with -m perf)"]
 
 [tool.ruff]
 target-version = "py310"

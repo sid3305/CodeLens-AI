@@ -8,6 +8,8 @@ timings are written to the pytest report via ``record_property``.
 
 import time
 
+import pytest
+
 from backend.services import dependency_service
 from tests.helpers import upload_repo
 
@@ -69,6 +71,7 @@ def generated_repository(file_count: int = FILE_COUNT) -> dict[str, str]:
     return files
 
 
+@pytest.mark.perf
 def test_two_thousand_file_repository_meets_the_budget(client, monkeypatch, record_property):
     repo = upload_repo(client, generated_repository())
     assert repo["file_count"] == FILE_COUNT + FILE_COUNT // 2 // 50
