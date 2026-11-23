@@ -28,7 +28,15 @@ def test_env_example_documents_required_keys_without_values():
 
 @pytest.mark.parametrize(
     "path",
-    [".env", ".env.local", "uploads/x", ".review-scratch/x", "frontend/node_modules/x"],
+    [
+        ".env",
+        ".env.local",
+        "uploads/x",
+        ".review-scratch/x",
+        "frontend/node_modules/x",
+        ".coverage",
+        "htmlcov/index.html",
+    ],
 )
 def test_private_paths_are_gitignored(path):
     if not shutil.which("git") or not (PROJECT_ROOT / ".git").exists():
