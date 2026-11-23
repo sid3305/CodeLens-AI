@@ -97,6 +97,30 @@ describe('WorkspacePanel AI summary (A1 / BUG-02, BUG-03)', () => {
   })
 })
 
+describe('WorkspacePanel sections (A10)', () => {
+  it('shows dependency analysis under Architecture', async () => {
+    mockedApi.getDependenciesAnalysis.mockReturnValue(new Promise(() => {}))
+    render(<WorkspacePanel {...props({ activeSection: 'architecture' })} />)
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Architecture' })).toBeInTheDocument()
+    expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledWith(repoA.id)
+    expect(screen.queryByText(/later milestone/i)).not.toBeInTheDocument()
+  })
+
+  it('guides the user instead of showing a placeholder when no file is selected', () => {
+    render(<WorkspacePanel {...props({ activeSection: 'file-preview' })} />)
+
+    expect(screen.getByText(/select a file in the explorer/i)).toBeInTheDocument()
+    expect(screen.queryByText(/later milestone/i)).not.toBeInTheDocument()
+  })
+
+  it('does not present a made-up repository health metric', () => {
+    render(<WorkspacePanel {...props()} />)
+
+    expect(screen.queryByText(/repository health/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('WorkspacePanel regenerate (A2 / BUG-05)', () => {
   it('asks the backend to bypass the saved summary', async () => {
     mockedApi.getSummary.mockResolvedValue(summaryFor(repoA))

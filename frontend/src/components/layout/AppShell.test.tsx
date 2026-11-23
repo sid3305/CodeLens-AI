@@ -63,6 +63,18 @@ describe('AppShell analysis notice (A3 / BUG-19)', () => {
   })
 })
 
+describe('AppShell placeholders (A10 / BUG-10)', () => {
+  it('does not show the unimplemented AI chat panel', async () => {
+    mockedApi.health.mockResolvedValue({ status: 'healthy' })
+
+    render(<AppShell />)
+    await screen.findByText(/api connected/i)
+
+    expect(screen.queryByPlaceholderText(/ask about your repository/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/ai assistant/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('AppShell API status (A3 / BUG-18)', () => {
   it('reports the API as unreachable when the health check fails', async () => {
     mockedApi.health.mockRejectedValue(new TypeError('Failed to fetch'))

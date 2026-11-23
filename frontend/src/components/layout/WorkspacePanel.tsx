@@ -72,13 +72,7 @@ interface ExplanationState {
 const sectionTitles: Record<WorkspaceSection, string> = {
   overview: 'Project Overview',
   architecture: 'Architecture',
-  'data-flow': 'Data Flow',
-  dependencies: 'Dependencies',
   issues: 'Issues & Findings',
-  performance: 'Performance',
-  documentation: 'Documentation & Tests',
-  'code-improvements': 'Code Improvements',
-  reports: 'Reports',
   'file-preview': 'File Preview',
 }
 
@@ -419,7 +413,7 @@ export default function WorkspacePanel({
   const isOverview = activeSection === 'overview'
   const isIssues = activeSection === 'issues'
   const isFilePreview = activeSection === 'file-preview'
-  const isDependencies = activeSection === 'dependencies'
+  const isArchitecture = activeSection === 'architecture'
 
   const findings = analysis?.findings ?? []
   const analysisOutcome = analysis ? describeAnalysis(analysis) : null
@@ -626,8 +620,15 @@ const filteredFindings = findings.filter((finding) => {
 
               <StatCard
                 icon={<Activity />}
-                label="Repository Health"
-                value={analysis ? 'Analyzed' : 'Pending'}
+                label="Analyzers run"
+                value={
+                  analysisOutcome
+                    ? `${analysisOutcome.completedTools.length}/${
+                        analysisOutcome.completedTools.length +
+                        analysisOutcome.failedTools.length
+                      }`
+                    : '—'
+                }
                 color="blue"
               />
             </div>
@@ -923,7 +924,7 @@ const filteredFindings = findings.filter((finding) => {
       </>
     )}
   </>
-        ) : isDependencies ? (
+        ) : isArchitecture ? (
           <DependenciesPanel
             repository={repository}
             onRefresh={onRefresh}
@@ -1032,12 +1033,9 @@ const filteredFindings = findings.filter((finding) => {
         ) : (
           <section className="content-section">
             <div className="empty-content">
-              <FolderGit2 size={25} />
-              <h3>{sectionTitles[activeSection]}</h3>
-              <p>
-                This workspace module will be connected to repository
-                intelligence in a later milestone.
-              </p>
+              <FileCode2 size={25} />
+              <h3>No file selected</h3>
+              <p>Select a file in the explorer to preview it here.</p>
             </div>
           </section>
         )}

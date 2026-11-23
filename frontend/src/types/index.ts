@@ -1,14 +1,9 @@
 
+/** Sections with a real implementation. File preview is reached via the explorer. */
 export type WorkspaceSection =
   | 'overview'
   | 'architecture'
-  | 'data-flow'
-  | 'dependencies'
   | 'issues'
-  | 'performance'
-  | 'documentation'
-  | 'code-improvements'
-  | 'reports'
   | 'file-preview'
 
 export interface RepositoryFile {

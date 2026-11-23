@@ -5,16 +5,8 @@ import {
   Code2,
   LayoutDashboard,
   Network,
-  Workflow,
-  Package,
   Bug,
-  Gauge,
-  BookOpen,
-  Sparkles,
-  FileText,
   FolderGit2,
-  Settings,
-  Plus,
   Search,
   Upload,
   Trash2,
@@ -48,19 +40,14 @@ interface SidebarProps {
 
   importing: boolean
   loading: boolean
+  /** Number of findings from the latest analysis, or null if none ran yet. */
+  issueCount: number | null
 }
 
 const navigation = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'architecture', label: 'Architecture', icon: Network },
-  { id: 'data-flow', label: 'Data Flow', icon: Workflow },
-  { id: 'dependencies', label: 'Dependencies', icon: Package },
   { id: 'issues', label: 'Issues', icon: Bug },
-  { id: 'performance', label: 'Performance', icon: Gauge },
-  { id: 'documentation', label: 'Documentation & Tests', icon: BookOpen },
-  { id: 'code-improvements', label: 'Code Improvements', icon: Sparkles },
-  { id: 'reports', label: 'Reports', icon: FileText },
-  { id: 'file-preview', label: 'File Preview', icon: FileText },
 ] as const
 
 export default function Sidebar({
@@ -77,6 +64,7 @@ export default function Sidebar({
   onDeleteRepository,
   importing,
   loading,
+  issueCount,
 }: SidebarProps) {
   const [explorerOpen, setExplorerOpen] = useState(true)
   const [workspaceOpen, setWorkspaceOpen] = useState(true)
@@ -153,11 +141,12 @@ export default function Sidebar({
           </button>
 
           {workspaceOpen && (
-            <nav className="workspace-navigation">
+            <nav className="workspace-navigation" aria-label="Workspace sections">
               {navigation.map(({ id, label, icon: Icon }) => (
                 <button
                   key={id}
                   onClick={() => onNavigate(id)}
+                  aria-current={activeSection === id ? 'page' : undefined}
                   className={`nav-item ${
                     activeSection === id ? 'active' : ''
                   }`}
@@ -166,8 +155,8 @@ export default function Sidebar({
                   <Icon size={17} />
                   <span>{label}</span>
 
-                  {id === 'issues' && (
-                    <span className="nav-count">—</span>
+                  {id === 'issues' && issueCount !== null && (
+                    <span className="nav-count">{issueCount}</span>
                   )}
                 </button>
               ))}
@@ -184,7 +173,6 @@ export default function Sidebar({
           >
             {managerOpen ? <ChevronDown /> : <ChevronRight />}
             <span>REPOSITORIES</span>
-            <Plus size={15} className="section-action" />
           </button>
 
           {managerOpen && (
@@ -269,10 +257,6 @@ export default function Sidebar({
         </section>
       </div>
 
-      <button className="sidebar-settings">
-        <Settings size={17} />
-        <span>Workspace Settings</span>
-      </button>
     </aside>
   )
 }

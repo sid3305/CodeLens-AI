@@ -1,26 +1,22 @@
 import {
-  GitBranch,
   FolderGit2,
   RefreshCw,
   AlertTriangle,
   Code2,
   Files,
   CheckCircle2,
-  XCircle,
   Search,
   ChevronDown,
-  ExternalLink,
   Link,
   GitMerge,
   Package,
   Zap,
-  Eye,
   RotateCcw,
   Layout,
   Network,
 } from 'lucide-react'
 
-import { useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState, useCallback } from 'react'
 import type { ReactNode } from 'react'
 
 import {
@@ -29,7 +25,6 @@ import {
   type CircularDependency,
   type ExternalDependency,
   type ModuleDependency,
-  type DependenciesGraphData,
 } from '../../services/api'
 import type { Repository } from '../../types'
 
@@ -60,12 +55,24 @@ function StatCard({
   )
 }
 
+/** Last path segment, for either separator style. */
+function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() || path
+}
+
+/** A module shown by file name, with the full path available on hover. */
+function ModuleName({ path, className }: { path: string; className?: string }) {
+  return (
+    <span className={className} title={path}>
+      {baseName(path)}
+    </span>
+  )
+}
+
 function CircularDependencyCard({
   cycle,
-  onFocus,
 }: {
   cycle: CircularDependency
-  onFocus: (module: string) => void
 }) {
   return (
     <article className="finding-card">
@@ -87,13 +94,7 @@ function CircularDependencyCard({
       <div className="circular-cycle-visualization">
         {cycle.cycle.map((mod, idx) => (
           <div key={idx} className="cycle-step">
-            <button
-              className="cycle-module"
-              onClick={() => onFocus(mod)}
-              title="Focus on this module"
-            >
-              {mod.split('/').pop() || mod}
-            </button>
+            <ModuleName path={mod} className="cycle-module" />
             {idx < cycle.cycle.length - 1 && (
               <GitMerge size={16} className="cycle-arrow" />
             )}
@@ -101,13 +102,7 @@ function CircularDependencyCard({
         ))}
         {/* Close the loop */}
         <div className="cycle-step">
-          <button
-            className="cycle-module"
-            onClick={() => onFocus(cycle.cycle[0])}
-            title="Back to start"
-          >
-            {cycle.cycle[0].split('/').pop() || cycle.cycle[0]}
-          </button>
+          <ModuleName path={cycle.cycle[0]} className="cycle-module" />
         </div>
       </div>
 
@@ -122,10 +117,8 @@ function CircularDependencyCard({
 
 function ExternalDependencyCard({
   dep,
-  onViewDetails,
 }: {
   dep: ExternalDependency
-  onViewDetails: (name: string) => void
 }) {
   return (
     <article className={`dependency-card ${dep.is_dev_dependency ? 'dev-dependency' : ''}`}>
@@ -148,23 +141,11 @@ function ExternalDependencyCard({
 
       <div className="dependency-sources">
         {dep.source_files.slice(0, 3).map((file, idx) => (
-          <span key={idx} className="dep-source-file" title={file}>
-            {file.split('/').pop() || file}
-          </span>
+          <ModuleName key={idx} path={file} className="dep-source-file" />
         ))}
         {dep.source_files.length > 3 && (
           <span className="dep-source-more">+{dep.source_files.length - 3} more</span>
         )}
-      </div>
-
-      <div className="dependency-actions">
-        <button
-          className="icon-button small"
-          onClick={() => onViewDetails(dep.name)}
-          title="View dependency details"
-        >
-          <ExternalLink size={14} />
-        </button>
       </div>
     </article>
   )
@@ -172,30 +153,16 @@ function ExternalDependencyCard({
 
 function ModuleDependencyList({
   dependencies,
-  onFocusModule,
 }: {
   dependencies: ModuleDependency[]
-  onFocusModule: (module: string) => void
 }) {
   return (
     <div className="module-deps-list">
       {dependencies.map((dep, idx) => (
         <div key={idx} className="module-dep-row">
-          <button
-            className="module-link source"
-            onClick={() => onFocusModule(dep.source_module)}
-            title="Focus source module"
-          >
-            {dep.source_module.split('/').pop() || dep.source_module}
-          </button>
+          <ModuleName path={dep.source_module} className="module-link source" />
           <span className="dep-arrow">→</span>
-          <button
-            className="module-link target"
-            onClick={() => onFocusModule(dep.target_module)}
-            title="Focus target module"
-          >
-            {dep.target_module.split('/').pop() || dep.target_module}
-          </button>
+          <ModuleName path={dep.target_module} className="module-link target" />
           {dep.imports.length > 0 && (
             <span className="dep-imports">
               {dep.imports.slice(0, 3).join(', ')}
@@ -216,9 +183,7 @@ export default function DependenciesPanel({
   const [analysis, setAnalysis] = useState<DependenciesAnalysisResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'overview' | 'circular' | 'external' | 'modules' | 'graph'>('overview')
-  const [focusedModule, setFocusedModule] = useState<string | null>(null)
-  const [graphView, setGraphView] = useState<'full' | 'modules'>('modules')
+  const [activeTab, setActiveTab] = useState<'overview' | 'circular' | 'external' | 'modules'>('overview')
 
   const loadDependencies = useCallback(async () => {
     if (!repository) return
@@ -351,13 +316,6 @@ export default function DependenciesPanel({
           <Network size={16} />
           Modules ({analysis?.module_dependencies.length ?? 0})
         </button>
-        <button
-          className={`tab-button ${activeTab === 'graph' ? 'active' : ''}`}
-          onClick={() => setActiveTab('graph')}
-        >
-          <GitBranch size={16} />
-          Graph
-        </button>
       </div>
 
       {/* Tab Content */}
@@ -365,40 +323,22 @@ export default function DependenciesPanel({
         {activeTab === 'overview' && analysis && (
           <DependenciesOverview
             analysis={analysis}
-            onFocusModule={setFocusedModule}
+            onShowCircular={() => setActiveTab('circular')}
           />
         )}
 
         {activeTab === 'circular' && analysis && (
-          <CircularDependenciesTab
-            circular={analysis.circular_dependencies}
-            onFocusModule={setFocusedModule}
-          />
+          <CircularDependenciesTab circular={analysis.circular_dependencies} />
         )}
 
         {activeTab === 'external' && analysis && (
-          <ExternalDependenciesTab
-            external={analysis.external_dependencies}
-            onViewDetails={(name) => console.log('View details:', name)}
-          />
+          <ExternalDependenciesTab external={analysis.external_dependencies} />
         )}
 
         {activeTab === 'modules' && analysis && (
-          <ModuleDependenciesTab
-            modules={analysis.module_dependencies}
-            onFocusModule={setFocusedModule}
-          />
+          <ModuleDependenciesTab modules={analysis.module_dependencies} />
         )}
 
-        {activeTab === 'graph' && analysis && (
-          <DependenciesGraphTab
-            graphData={analysis.dependency_graph_data}
-            view={graphView}
-            onViewChange={setGraphView}
-            focusedModule={focusedModule}
-            onFocusModule={setFocusedModule}
-          />
-        )}
       </div>
 
       {/* Language Breakdown */}
@@ -438,16 +378,16 @@ export default function DependenciesPanel({
 
 function DependenciesOverview({
   analysis,
-  onFocusModule,
+  onShowCircular,
 }: {
   analysis: DependenciesAnalysisResponse
-  onFocusModule: (module: string) => void
+  onShowCircular: () => void
 }) {
   const topCircular = analysis.circular_dependencies.slice(0, 3)
-  const topExternal = analysis.external_dependencies
+  const topExternal = [...analysis.external_dependencies]
     .sort((a, b) => b.import_count - a.import_count)
     .slice(0, 5)
-  const topModules = analysis.module_dependencies
+  const topModules = [...analysis.module_dependencies]
     .sort((a, b) => b.edge_count - a.edge_count)
     .slice(0, 10)
 
@@ -468,23 +408,19 @@ function DependenciesOverview({
                 </span>
                 <span className="cycle-path">
                   {cycle.cycle.map((m, i) => (
-                    <>
-                      <button
-                        className="cycle-module-inline"
-                        onClick={() => onFocusModule(m)}
-                      >
-                        {m.split('/').pop() || m}
-                      </button>
+                    <Fragment key={`${m}-${i}`}>
+                      <ModuleName path={m} className="cycle-module-inline" />
                       {i < cycle.cycle.length - 1 && <span> → </span>}
-                    </>
+                    </Fragment>
                   ))}
                 </span>
               </div>
             ))}
             {analysis.circular_dependencies.length > 3 && (
               <button
+                type="button"
                 className="secondary-button small"
-                onClick={() => {}}
+                onClick={onShowCircular}
               >
                 View all {analysis.circular_dependencies.length} circular dependencies
               </button>
@@ -533,10 +469,7 @@ function DependenciesOverview({
           <span className="section-count">{analysis.module_dependencies.length} relationships</span>
         </h3>
         {topModules.length > 0 ? (
-          <ModuleDependencyList
-            dependencies={topModules}
-            onFocusModule={onFocusModule}
-          />
+          <ModuleDependencyList dependencies={topModules} />
         ) : (
           <div className="empty-content compact-empty">
             <Network size={20} />
@@ -550,10 +483,8 @@ function DependenciesOverview({
 
 function CircularDependenciesTab({
   circular,
-  onFocusModule,
 }: {
   circular: CircularDependency[]
-  onFocusModule: (module: string) => void
 }) {
   if (circular.length === 0) {
     return (
@@ -568,7 +499,7 @@ function CircularDependenciesTab({
   return (
     <div className="circular-dependencies-list">
       {circular.map((cycle, idx) => (
-        <CircularDependencyCard key={idx} cycle={cycle} onFocus={onFocusModule} />
+        <CircularDependencyCard key={idx} cycle={cycle} />
       ))}
     </div>
   )
@@ -576,10 +507,8 @@ function CircularDependenciesTab({
 
 function ExternalDependenciesTab({
   external,
-  onViewDetails,
 }: {
   external: ExternalDependency[]
-  onViewDetails: (name: string) => void
 }) {
   const [filter, setFilter] = useState<'all' | 'prod' | 'dev'>('all')
   const [search, setSearch] = useState('')
@@ -625,11 +554,7 @@ function ExternalDependenciesTab({
       ) : (
         <div className="external-deps-grid">
           {filtered.map((dep) => (
-            <ExternalDependencyCard
-              key={dep.name}
-              dep={dep}
-              onViewDetails={onViewDetails}
-            />
+            <ExternalDependencyCard key={dep.name} dep={dep} />
           ))}
         </div>
       )}
@@ -639,10 +564,8 @@ function ExternalDependenciesTab({
 
 function ModuleDependenciesTab({
   modules,
-  onFocusModule,
 }: {
   modules: ModuleDependency[]
-  onFocusModule: (module: string) => void
 }) {
   const [search, setSearch] = useState('')
 
@@ -678,116 +601,8 @@ function ModuleDependenciesTab({
           <p>No module dependencies match your search</p>
         </div>
       ) : (
-        <ModuleDependencyList
-          dependencies={filtered}
-          onFocusModule={onFocusModule}
-        />
+        <ModuleDependencyList dependencies={filtered} />
       )}
-    </div>
-  )
-}
-
-function DependenciesGraphTab({
-  graphData,
-  view,
-  onViewChange,
-  focusedModule,
-  onFocusModule,
-}: {
-  graphData: DependenciesGraphData
-  view: 'full' | 'modules'
-  onViewChange: (view: 'full' | 'modules') => void
-  focusedModule: string | null
-  onFocusModule: (module: string) => void
-}) {
-  return (
-    <div className="dependencies-graph-tab">
-      <div className="graph-controls">
-        <div className="view-toggle">
-          <button
-            className={`view-button ${view === 'modules' ? 'active' : ''}`}
-            onClick={() => onViewChange('modules')}
-          >
-            <Layout size={16} /> Module Graph
-          </button>
-          <button
-            className={`view-button ${view === 'full' ? 'active' : ''}`}
-            onClick={() => onViewChange('full')}
-          >
-            <Network size={16} /> Full Graph
-          </button>
-        </div>
-
-        {focusedModule && (
-          <div className="focused-indicator">
-            <Eye size={14} />
-            Focused: <strong>{focusedModule.split('/').pop() || focusedModule}</strong>
-            <button className="icon-button small" onClick={() => onFocusModule('')}>
-              <XCircle size={14} />
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="graph-container">
-        {view === 'modules' && graphData.moduleGraph ? (
-          <ModuleGraphView
-            graphData={graphData.moduleGraph}
-            focusedModule={focusedModule}
-            onFocusModule={onFocusModule}
-          />
-        ) : (
-          <FullGraphView
-            graphData={graphData}
-          />
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ModuleGraphView({
-  graphData,
-  focusedModule,
-  onFocusModule,
-}: {
-  graphData: { nodes: any[]; edges: any[] }
-  focusedModule: string | null
-  onFocusModule: (module: string) => void
-}) {
-  return (
-    <div className="graph-placeholder">
-      <Network size={48} />
-      <h3>Module Dependency Graph</h3>
-      <p>{graphData.nodes.length} modules, {graphData.edges.length} dependencies</p>
-      <p className="graph-note">
-        Interactive React Flow visualization will be implemented here.
-        Click modules to focus, drag to pan, scroll to zoom.
-      </p>
-      {focusedModule && (
-        <button className="primary-button" onClick={() => onFocusModule('')}>
-          <XCircle size={16} /> Clear Focus
-        </button>
-      )}
-    </div>
-  )
-}
-
-function FullGraphView({
-  graphData,
-}: {
-  graphData: DependenciesGraphData
-}) {
-  return (
-    <div className="graph-placeholder">
-      <GitBranch size={48} />
-      <h3>Full Code Graph</h3>
-      <p>{graphData.totalNodes} total nodes, {graphData.totalEdges} total edges</p>
-      <p>Showing {graphData.showingNodes} nodes, {graphData.showingEdges} edges</p>
-      <p className="graph-note">
-        Interactive React Flow visualization with folder grouping,
-        click-to-expand, and edge type filtering.
-      </p>
     </div>
   )
 }

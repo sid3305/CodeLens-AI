@@ -9,7 +9,6 @@ import {
 
 import Sidebar from './Sidebar'
 import WorkspacePanel from './WorkspacePanel'
-import AIAssistant from './AIAssistant'
 
 import { api } from '../../services/api'
 import { describeAnalysis, type MessageTone } from '../../lib/analysis'
@@ -35,7 +34,6 @@ export default function AppShell() {
     useState<WorkspaceSection>('overview')
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [assistantCollapsed, setAssistantCollapsed] = useState(false)
   const [theme, setTheme] = useState<Theme>('light')
 
   const [repositories, setRepositories] = useState<Repository[]>([])
@@ -281,6 +279,7 @@ export default function AppShell() {
           onDeleteRepository={(repository) => setDeleteTarget(repository)}
           importing={importing}
           loading={loading}
+          issueCount={analysis ? analysis.findings.length : null}
         />
       )}
 
@@ -373,10 +372,6 @@ export default function AppShell() {
             onOpenFinding={handleSelectFile}  
           />
 
-          <AIAssistant
-            collapsed={assistantCollapsed}
-            onToggle={() => setAssistantCollapsed(!assistantCollapsed)}
-          />
         </div>
             </div>
 
