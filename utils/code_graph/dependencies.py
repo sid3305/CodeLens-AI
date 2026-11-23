@@ -246,7 +246,8 @@ def module_graph(graph: ImportGraph, modules: list[dict[str, Any]]) -> dict[str,
             "source": f"file:{dep['source_module']}",
             "target": f"file:{dep['target_module']}",
             "type": "moduleEdge",
-            "data": {"imports": dep["imports"], "edgeCount": dep["edge_count"]},
+            # Import names are in module_dependencies; not repeated here.
+            "data": {"edgeCount": dep["edge_count"]},
         }
         for dep in modules
     ]

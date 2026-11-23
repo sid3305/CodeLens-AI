@@ -23,6 +23,15 @@ class PythonParser(BaseParser):
         if PY_LANGUAGE:
             self.parser.language = PY_LANGUAGE
 
+    def _parse(self, parser, content: str):
+        """Parse once per file: parse_file and extract_edges share the tree."""
+        cached = getattr(self, "_last_parse", None)
+        if cached is not None and cached[0] is parser and cached[1] == content:
+            return cached[2]
+        tree = parser.parse(content.encode("utf-8"))
+        self._last_parse = (parser, content, tree)
+        return tree
+
     @property
     def language_name(self) -> str:
         return "python"
@@ -39,7 +48,7 @@ class PythonParser(BaseParser):
         repo_rel_path = str(file_path)
         language = "python"
 
-        tree = self.parser.parse(content.encode("utf-8"))
+        tree = self._parse(self.parser, content)
         root = tree.root_node
 
         # File node
@@ -264,7 +273,7 @@ class PythonParser(BaseParser):
         file_path = file_node.file_path
 
         # Parse again for call extraction
-        tree = self.parser.parse(content.encode("utf-8"))
+        tree = self._parse(self.parser, content)
         root = tree.root_node
 
         # Build qualified name map for this file

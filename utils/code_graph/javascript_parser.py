@@ -42,6 +42,15 @@ class JavaScriptParser(BaseParser):
             return self.tsx_parser if ext == ".tsx" else self.ts_parser
         return self.js_parser
 
+    def _parse(self, parser, content: str):
+        """Parse once per file: parse_file and extract_edges share the tree."""
+        cached = getattr(self, "_last_parse", None)
+        if cached is not None and cached[0] is parser and cached[1] == content:
+            return cached[2]
+        tree = parser.parse(content.encode("utf-8"))
+        self._last_parse = (parser, content, tree)
+        return tree
+
     @property
     def language_name(self) -> str:
         return "javascript"
@@ -60,7 +69,7 @@ class JavaScriptParser(BaseParser):
         nodes = []
         repo_rel_path = str(file_path)
 
-        tree = parser.parse(content.encode("utf-8"))
+        tree = self._parse(parser, content)
         root = tree.root_node
 
         # File node
@@ -326,7 +335,7 @@ class JavaScriptParser(BaseParser):
         file_path = file_node.file_path
 
         parser = self._get_parser(Path(file_path))
-        tree = parser.parse(content.encode("utf-8"))
+        tree = self._parse(parser, content)
         root = tree.root_node
 
         func_nodes = {n.qualified_name: n for n in nodes if n.node_type in (NodeType.FUNCTION, NodeType.METHOD)}

@@ -23,6 +23,7 @@ import posixpath
 import re
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -670,14 +671,24 @@ def _unresolved(item: ResolvedImport, reason: str) -> ResolvedImport:
 # --- Entry point ---------------------------------------------------------------
 
 
-def build_import_graph(root: Path, files: list[str]) -> ImportGraph:
+def build_import_graph(
+    root: Path,
+    files: list[str],
+    read_text: Callable[[str], str] | None = None,
+) -> ImportGraph:
     """
     Build the import graph for ``files`` (repository-relative POSIX paths
     under ``root``). Non-Python/JS files are used only for resolution
-    (e.g. tsconfig.json, JSON imports).
+    (e.g. tsconfig.json, JSON imports). ``read_text`` lets callers share
+    one read of each file with other analyses.
     """
 
     root = Path(root)
+
+    def default_read(path: str) -> str:
+        return (root / path).read_text(encoding="utf-8", errors="replace")
+
+    read_text = read_text or default_read
     resolver = _Resolver(root, files)
 
     parsed: list[str] = []
@@ -691,7 +702,7 @@ def build_import_graph(root: Path, files: list[str]) -> ImportGraph:
             continue
 
         try:
-            content = (root / path).read_text(encoding="utf-8", errors="replace")
+            content = read_text(path)
         except OSError as error:
             skipped.append(SkippedFile(path, f"unreadable: {error.strerror or error}"))
             continue

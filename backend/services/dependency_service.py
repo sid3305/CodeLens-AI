@@ -15,11 +15,12 @@ from __future__ import annotations
 import json
 import logging
 import threading
+from collections import OrderedDict
 from pathlib import Path, PurePosixPath
 from typing import Any
 
 from backend.services.repository_service import get_repository
-from utils.code_graph import CodeGraphBuilder, parse_repository
+from utils.code_graph import CodeEdge, CodeGraphBuilder, EdgeType, parse_repository
 from utils.code_graph.dependencies import MANIFEST_PATTERNS, build_dependency_report
 from utils.code_graph.import_graph import build_import_graph
 from utils.config import get_upload_dir
@@ -36,6 +37,10 @@ GRAPH_EXPORT_LIMIT = 500
 
 _locks: dict[str, threading.Lock] = {}
 _locks_guard = threading.Lock()
+
+# Recently used reports, so repeated requests skip the disk entirely.
+_MEMORY_CACHE_SIZE = 8
+_memory: OrderedDict[str, dict[str, Any]] = OrderedDict()
 
 
 def _lock_for(repo_id: str) -> threading.Lock:
@@ -100,19 +105,32 @@ def compute_dependency_report(repo_id: str, root: Path) -> dict[str, Any]:
         for path in get_code_files(root, include_patterns=MANIFEST_PATTERNS)
     ]
 
-    graph = build_import_graph(root, files)
+    # Each file is read once and shared by both analyses.
+    contents: dict[str, str] = {}
 
     def read_file(relative: str) -> str:
-        try:
-            return (root / relative).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            return ""
+        if relative not in contents:
+            contents[relative] = (root / relative).read_text(encoding="utf-8", errors="replace")
+        return contents[relative]
+
+    graph = build_import_graph(root, files, read_text=read_file)
 
     # Function-level graph (definitions, calls) over the same files, using
     # repository-relative paths so node ids never contain local paths.
     parsed = parse_repository([PurePosixPath(path) for path in graph.files], read_file)
+    # File-to-file IMPORTS edges come from the resolved import graph.
+    import_edges = [
+        CodeEdge(
+            source=f"file:{source}",
+            target=f"file:{target}",
+            edge_type=EdgeType.IMPORTS,
+            confidence="certain",
+            line=items[0].line,
+        )
+        for (source, target), items in graph.internal_edges().items()
+    ]
     builder = CodeGraphBuilder()
-    builder.build(parsed["nodes"], parsed["edges"])
+    builder.build(parsed["nodes"], parsed["edges"] + import_edges)
 
     report = build_dependency_report(
         repo_id,
@@ -144,13 +162,31 @@ def get_dependency_report(repo_id: str, *, refresh: bool = False) -> dict[str, A
 
     with _lock_for(repo_id):
         if not refresh:
-            cached = _read_cache(cache)
+            cached = _memory.get(repo_id)
+            if cached is None:
+                cached = _read_cache(cache)
             if cached is not None:
+                _remember(repo_id, cached)
                 return cached
 
         report = compute_dependency_report(repo_id, root)
         _write_cache(cache, report)
+        _remember(repo_id, report)
         return report
+
+
+def _remember(repo_id: str, report: dict[str, Any]) -> None:
+    with _locks_guard:
+        _memory[repo_id] = report
+        _memory.move_to_end(repo_id)
+        while len(_memory) > _MEMORY_CACHE_SIZE:
+            _memory.popitem(last=False)
+
+
+def forget(repo_id: str) -> None:
+    """Drop the in-memory copy (the repository was deleted)."""
+    with _locks_guard:
+        _memory.pop(repo_id, None)
 
 
 def _trim(graph: dict[str, Any], max_nodes: int) -> dict[str, Any]:

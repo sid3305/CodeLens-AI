@@ -8,6 +8,7 @@ from backend.schemas.repository import (
     RepositoryFilesResponse,
     RepositoryResponse,
 )
+from backend.services import dependency_service
 from backend.services.repository_service import (
     delete_repository,
     get_file_content,
@@ -106,7 +107,9 @@ def remove_repository(repo_id: str):
     """Delete an imported repository and its workspace."""
 
     try:
-        return delete_repository(repo_id)
+        result = delete_repository(repo_id)
+        dependency_service.forget(repo_id)
+        return result
 
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))

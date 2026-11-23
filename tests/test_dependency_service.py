@@ -189,3 +189,42 @@ def test_no_absolute_paths_in_any_route_or_the_cache(client, upload_root):
     cache = (upload_root / repo["id"] / "dependencies.json").read_text()
     assert root_text.replace("\\", "\\\\") not in cache
     assert root_text not in cache
+
+
+# --- in-memory cache -------------------------------------------------------------
+
+
+def test_repeated_reads_are_served_from_memory(client, upload_root, compute_calls):
+    repo = upload_repo(client)
+    client.get(_url(repo))
+    (upload_root / repo["id"] / "dependencies.json").unlink()
+
+    assert client.get(_url(repo)).status_code == 200
+    assert len(compute_calls) == 1
+
+
+def test_after_a_restart_the_persisted_report_is_used(client, compute_calls, monkeypatch):
+    repo = upload_repo(client)
+    client.get(_url(repo))
+    monkeypatch.setattr(dependency_service, "_memory", type(dependency_service._memory)())
+
+    assert client.get(_url(repo)).status_code == 200
+    assert len(compute_calls) == 1
+
+
+def test_deleting_a_repository_drops_its_cached_report(client):
+    repo = upload_repo(client)
+    client.get(_url(repo))
+    assert repo["id"] in dependency_service._memory
+
+    assert client.delete(f"/api/repositories/{repo['id']}").status_code == 200
+
+    assert repo["id"] not in dependency_service._memory
+    assert client.get(_url(repo)).status_code == 404
+
+
+def test_memory_cache_is_bounded(client):
+    for _ in range(dependency_service._MEMORY_CACHE_SIZE + 2):
+        client.get(_url(upload_repo(client)))
+
+    assert len(dependency_service._memory) <= dependency_service._MEMORY_CACHE_SIZE
