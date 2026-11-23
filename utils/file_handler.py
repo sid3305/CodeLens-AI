@@ -63,31 +63,6 @@ def create_workspace():
     return workspace
 
 
-# ---------------- FILE UPLOAD ----------------
-
-def save_uploaded_file(uploaded_file):
-    """Save an uploaded file in its own workspace."""
-
-    workspace = create_workspace()
-
-    # Never trust the uploaded filename as a filesystem path.
-    filename = Path(uploaded_file.name).name
-
-    if not filename or filename in {".", ".."}:
-        raise ValueError("Invalid uploaded filename.")
-
-    file_path = workspace / filename
-
-    if file_path.suffix.lower() == ".zip":
-        if uploaded_file.size > MAX_ARCHIVE_SIZE:
-            raise ValueError("ZIP file exceeds the 100 MB upload limit.")
-
-    with open(file_path, "wb") as f:
-        f.write(uploaded_file.getbuffer())
-
-    return str(file_path)
-
-
 # ---------------- PORTABLE NAMES ----------------
 
 _WINDOWS_RESERVED_NAMES = {

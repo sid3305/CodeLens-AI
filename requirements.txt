@@ -19,6 +19,3 @@ tree-sitter-python
 tree-sitter-javascript
 tree-sitter-typescript
 networkx
-
-# --- Legacy Streamlit UI (removed in B9) ---
-streamlit
