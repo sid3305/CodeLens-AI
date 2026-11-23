@@ -252,9 +252,9 @@ export const api = {
     }
   },
 
-  generateSummary: (repoId: string) =>
+  generateSummary: (repoId: string, options: { force?: boolean } = {}) =>
     request<SummaryResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/summary`,
+      `/repositories/${encodeURIComponent(repoId)}/summary${options.force ? '?force=true' : ''}`,
       { method: 'POST' },
     ),
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from backend.schemas.ai import (
     SummaryResponse,
@@ -53,14 +53,20 @@ def get_repository_summary(repo_id: str):
 
 
 @router.post("/{repo_id}/summary", response_model=SummaryResponse)
-def generate_repository_summary(repo_id: str):
+def generate_repository_summary(
+    repo_id: str,
+    force: bool = Query(
+        False,
+        description="Regenerate even if a saved summary exists.",
+    ),
+):
     """Generate and save an AI-powered repository summary."""
 
     try:
         repository = get_repository(repo_id)
 
-        # Reuse an existing summary instead of calling Groq again.
-        saved_summary = get_saved_repository_summary(repo_id)
+        # Reuse an existing summary unless a regeneration was requested.
+        saved_summary = None if force else get_saved_repository_summary(repo_id)
 
         if saved_summary:
             return SummaryResponse(

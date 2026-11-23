@@ -97,6 +97,18 @@ describe('WorkspacePanel AI summary (A1 / BUG-02, BUG-03)', () => {
   })
 })
 
+describe('WorkspacePanel regenerate (A2 / BUG-05)', () => {
+  it('asks the backend to bypass the saved summary', async () => {
+    mockedApi.getSummary.mockResolvedValue(summaryFor(repoA))
+    const user = userEvent.setup()
+    render(<WorkspacePanel {...props()} />)
+
+    await user.click(await screen.findByRole('button', { name: /regenerate summary/i }))
+
+    expect(mockedApi.generateSummary).toHaveBeenCalledWith(repoA.id, { force: true })
+  })
+})
+
 describe('WorkspacePanel file explanation (A1 / BUG-04)', () => {
   it('clears the explanation when a different file is opened', async () => {
     mockedApi.explainFile.mockImplementation(async (_id: string, path: string) => ({

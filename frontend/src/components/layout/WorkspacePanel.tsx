@@ -360,14 +360,14 @@ export default function WorkspacePanel({
   const generatingSummary =
     repositoryId !== null && generatingSummaryFor === repositoryId
 
-  const handleGenerateSummary = async () => {
+  const handleGenerateSummary = async (force = false) => {
     if (!repositoryId) return
 
     const targetId = repositoryId
     setGeneratingSummaryFor(targetId)
 
     try {
-      const data = await api.generateSummary(targetId)
+      const data = await api.generateSummary(targetId, { force })
       setSummaryState({ repoId: targetId, data, error: null })
     } catch (error) {
       setSummaryState((previous) => ({
@@ -672,7 +672,7 @@ const filteredFindings = findings.filter((finding) => {
                   )}
                   <button
                     className="secondary-button regenerate-btn"
-                    onClick={() => void handleGenerateSummary()}
+                    onClick={() => void handleGenerateSummary(true)}
                     disabled={generatingSummary}
                   >
                     <RefreshCw size={14} />
