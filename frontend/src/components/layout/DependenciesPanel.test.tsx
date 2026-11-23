@@ -1,9 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 import DependenciesPanel from './DependenciesPanel'
-import { api, type DependenciesAnalysisResponse } from '../../services/api'
+import { api } from '../../services/api'
+import type { DependenciesAnalysisResponse, Repository } from '../../types'
 
 vi.mock('../../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../services/api')>()
@@ -44,7 +45,47 @@ beforeEach(() => {
   mockedApi.getDependenciesAnalysis.mockResolvedValue(structuredClone(analysis))
 })
 
-const repository = { id: 'r', name: 'repo', source: 'zip' }
+const repository: Repository = { id: 'r', name: 'repo', source: 'zip', file_count: 2, created_at: '' }
+
+describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
+  it('does not re-run the analysis when the repository list is refreshed', async () => {
+    const { rerender } = render(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('button', { name: /external/i })
+
+    // A repository-list refresh produces a new object for the same repository.
+    rerender(<DependenciesPanel repository={{ ...repository }} />)
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-runs the analysis exactly once when refresh is clicked', async () => {
+    const user = userEvent.setup()
+    render(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('button', { name: /external/i })
+
+    await user.click(screen.getByRole('button', { name: /refresh dependency analysis/i }))
+    await waitFor(() => expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(2)
+  })
+
+  it('never shows one repository’s analysis for another', async () => {
+    const other: Repository = { ...repository, id: 'other', name: 'other' }
+    mockedApi.getDependenciesAnalysis.mockImplementation((id: string) =>
+      id === 'r'
+        ? Promise.resolve(structuredClone(analysis))
+        : new Promise(() => {}),
+    )
+    const { rerender } = render(<DependenciesPanel repository={repository} />)
+    expect((await screen.findAllByText('a1.py')).length).toBeGreaterThan(0)
+
+    rerender(<DependenciesPanel repository={other} />)
+
+    expect(screen.queryAllByText('a1.py')).toHaveLength(0)
+  })
+})
 
 describe('DependenciesPanel (A10)', () => {
   it('does not offer the unimplemented graph view', async () => {

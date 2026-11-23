@@ -6,23 +6,26 @@ export type WorkspaceSection =
   | 'issues'
   | 'file-preview'
 
-export interface RepositoryFile {
-  name: string
-  path: string
-  extension?: string
-  type?: 'file' | 'folder'
-  children?: RepositoryFile[]
-  language?: string
-}
+/** Shapes returned by the backend API. This file is the single source of truth. */
 
 export interface Repository {
   id: string
   name: string
-  source: string
-  file_count?: number
-  created_at?: string
-  branch?: string
-  status?: 'ready' | 'processing'
+  source: 'zip' | 'github'
+  file_count: number
+  created_at: string
+}
+
+export interface RepositoryFile {
+  path: string
+  name: string
+  extension: string
+}
+
+export interface RepositoryFilesResponse {
+  repository_id: string
+  total_files: number
+  files: RepositoryFile[]
 }
 
 export interface AnalyzerStatus {
@@ -83,6 +86,14 @@ export interface SummaryResponse {
   truncated: boolean
 }
 
+export interface ExplainResponse {
+  repository_id: string
+  file_path: string
+  explanation: string
+  generated_at: string
+  truncated: boolean
+}
+
 export interface ExternalDependency {
   name: string
   source_files: string[]
@@ -113,17 +124,35 @@ export interface LanguageBreakdown {
   external_deps: number
 }
 
+/** Node in the React Flow format produced by the backend graph exporter. */
+export interface GraphNode {
+  id: string
+  type: string
+  data: Record<string, unknown>
+  position: { x: number; y: number }
+}
+
+export interface GraphEdge {
+  id: string
+  source: string
+  target: string
+  type?: string
+  data?: Record<string, unknown>
+  animated?: boolean
+  style?: Record<string, string | number>
+}
+
 export interface DependenciesGraphData {
-  nodes: any[]
-  edges: any[]
+  nodes: GraphNode[]
+  edges: GraphEdge[]
   totalNodes: number
   totalEdges: number
   showingNodes: number
   showingEdges: number
   folders: string[]
   moduleGraph?: {
-    nodes: any[]
-    edges: any[]
+    nodes: GraphNode[]
+    edges: GraphEdge[]
   }
 }
 

@@ -3,7 +3,6 @@ from pydantic import BaseModel, Field
 
 class SummaryRequest(BaseModel):
     """Request to generate an AI repository summary."""
-    pass
 
 
 class SummaryResponse(BaseModel):

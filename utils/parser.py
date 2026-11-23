@@ -13,6 +13,6 @@ def read_file_content(file_path):
 
             return f.read()
 
-    except Exception as e:
+    except (OSError, UnicodeDecodeError) as e:
 
-        return f"Error reading file: {str(e)}"
+        return f"Error reading file: {e!s}"

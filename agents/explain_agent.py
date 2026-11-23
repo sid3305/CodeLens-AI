@@ -1,8 +1,7 @@
 
-from utils.llm import call_llm
 from prompts.prompts import CODE_EXPLANATION_PROMPT
+from utils.llm import call_llm
 from utils.security import prepare_content_for_llm
-
 
 MAX_FILE_CHARS = 12000
 

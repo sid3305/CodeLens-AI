@@ -63,6 +63,75 @@ describe('AppShell analysis notice (A3 / BUG-19)', () => {
   })
 })
 
+describe('AppShell file selection (D5)', () => {
+  const repos = [
+    { id: 'r1', name: 'first', source: 'zip', file_count: 2, created_at: '' },
+    { id: 'r2', name: 'second', source: 'zip', file_count: 1, created_at: '' },
+  ]
+
+  function deferred<T>() {
+    let resolve!: (value: T) => void
+    const promise = new Promise<T>((r) => {
+      resolve = r
+    })
+    return { promise, resolve }
+  }
+
+  beforeEach(() => {
+    mockedApi.health.mockResolvedValue({ status: 'healthy' })
+    mockedApi.getRepositories.mockResolvedValue(repos)
+    mockedApi.getAnalysisResults.mockRejectedValue(new Error('none'))
+    mockedApi.getFiles.mockImplementation(async (id: string) => ({
+      repository_id: id,
+      total_files: 2,
+      files:
+        id === 'r1'
+          ? [
+              { path: 'a.py', name: 'a.py', extension: '.py' },
+              { path: 'b.py', name: 'b.py', extension: '.py' },
+            ]
+          : [{ path: 'c.py', name: 'c.py', extension: '.py' }],
+    }))
+  })
+
+  it('shows the content of the file selected last, whatever order responses arrive in', async () => {
+    const slow = deferred<{ repository_id: string; path: string; content: string }>()
+    mockedApi.getFileContent = vi.fn((_id: string, path: string) =>
+      path === 'a.py'
+        ? slow.promise
+        : Promise.resolve({ repository_id: 'r1', path, content: 'content of b' }),
+    )
+    const user = userEvent.setup()
+    render(<AppShell />)
+
+    await user.click(await screen.findByRole('button', { name: 'a.py' }))
+    await user.click(screen.getByRole('button', { name: 'b.py' }))
+    await screen.findByText('content of b')
+    slow.resolve({ repository_id: 'r1', path: 'a.py', content: 'content of a' })
+    await new Promise((resolve) => setTimeout(resolve, 20))
+
+    expect(screen.queryByText('content of a')).not.toBeInTheDocument()
+    expect(screen.getByText('content of b')).toBeInTheDocument()
+  })
+
+  it('drops the previewed file when another repository is selected', async () => {
+    mockedApi.getFileContent = vi.fn(async (_id: string, path: string) => ({
+      repository_id: 'r1',
+      path,
+      content: `content of ${path}`,
+    }))
+    const user = userEvent.setup()
+    render(<AppShell />)
+
+    await user.click(await screen.findByRole('button', { name: 'a.py' }))
+    await screen.findByText('content of a.py')
+    await user.click(screen.getByRole('button', { name: /^second/i }))
+
+    await screen.findByRole('button', { name: 'c.py' })
+    expect(screen.queryByText('content of a.py')).not.toBeInTheDocument()
+  })
+})
+
 describe('AppShell placeholders (A10 / BUG-10)', () => {
   it('does not show the unimplemented AI chat panel', async () => {
     mockedApi.health.mockResolvedValue({ status: 'healthy' })

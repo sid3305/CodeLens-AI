@@ -1,8 +1,7 @@
 
-from utils.llm import call_llm
 from prompts.prompts import REPOSITORY_SUMMARY_PROMPT
+from utils.llm import call_llm
 from utils.security import redact_secrets
-
 
 MAX_REPOSITORY_CHARS = 30000
 

@@ -11,4 +11,4 @@
 #
 #   pip install -r requirements-analyzers.txt
 
-semgrep; sys_platform != "win32"
+semgrep==1.186.0; sys_platform != "win32"

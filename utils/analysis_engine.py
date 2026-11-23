@@ -1,11 +1,10 @@
 
-from utils.ruff_analyzer import run_ruff_analysis
 from utils.bandit_analyzer import run_bandit_analysis
-from utils.semgrep_analyzer import run_semgrep_analysis
-from utils.gitleaks_analyzer import run_gitleaks_analysis
-
-from utils.finding_normalizer import normalize_findings
 from utils.finding_deduplicator import deduplicate_findings
+from utils.finding_normalizer import normalize_findings
+from utils.gitleaks_analyzer import run_gitleaks_analysis
+from utils.ruff_analyzer import run_ruff_analysis
+from utils.semgrep_analyzer import run_semgrep_analysis
 
 
 def run_all_analyzers(target_path):
@@ -31,7 +30,7 @@ def run_all_analyzers(target_path):
             findings = analyzer(target_path)
 
             if not isinstance(findings, list):
-                raise ValueError(
+                raise TypeError(
                     f"{tool_name} returned an invalid findings format."
                 )
 
@@ -43,7 +42,9 @@ def run_all_analyzers(target_path):
                 "error": None
             }
 
-        except Exception as error:
+        # One analyzer failing (missing tool, crash, bad output) must not
+        # stop the others; the failure is reported in tool_status.
+        except Exception as error:  # noqa: BLE001
 
             tool_status[tool_name] = {
                 "status": "Failed",

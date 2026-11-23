@@ -2,6 +2,8 @@
 
 import re
 
+import pytest
+
 from tests.conftest import PROJECT_ROOT
 
 # Packages that cannot be installed from PyPI on native Windows.
@@ -24,6 +26,20 @@ def _package(line):
 def test_core_requirements_install_on_windows():
     packages = {_package(line) for line in _requirement_lines("requirements.txt")}
     assert not packages & WINDOWS_INCOMPATIBLE
+
+
+@pytest.mark.parametrize(
+    "name", ["requirements.txt", "requirements-dev.txt", "requirements-analyzers.txt"]
+)
+def test_every_dependency_is_pinned(name):
+    """D5: installs must be reproducible."""
+
+    unpinned = [
+        line
+        for line in _requirement_lines(name)
+        if not line.startswith("-r") and "==" not in line
+    ]
+    assert unpinned == []
 
 
 def test_optional_analyzers_are_guarded_by_platform_marker():

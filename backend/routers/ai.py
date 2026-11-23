@@ -1,23 +1,21 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, HTTPException, Query
 
+from agents.explain_agent import run_explain_agent
+from agents.repo_agent import run_repo_agent
 from backend.schemas.ai import (
-    SummaryResponse,
     ExplainRequest,
     ExplainResponse,
+    SummaryResponse,
 )
 from backend.services.repository_service import (
     get_repository,
     get_saved_repository_summary,
     save_repository_summary,
 )
-
-from agents.repo_agent import run_repo_agent
-from agents.explain_agent import run_explain_agent
 from utils.file_handler import get_code_files
 from utils.parser import read_file_content
-
-from datetime import datetime, timezone
-
 
 router = APIRouter(
     prefix="/api/repositories",
@@ -123,11 +121,6 @@ def generate_repository_summary(
             detail=f"AI service error: {error}",
         )
 
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to generate repository summary.",
-        )
 
 
 @router.post("/{repo_id}/files/explain", response_model=ExplainResponse)
@@ -138,8 +131,9 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
         repo_path = repository["path"]
 
         # Validate and resolve the file path
-        from utils.security import is_sensitive_file
         from pathlib import Path
+
+        from utils.security import is_sensitive_file
 
         requested_path = Path(request.file_path)
         if requested_path.is_absolute() or ".." in requested_path.parts:
@@ -180,5 +174,3 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
         raise HTTPException(status_code=400, detail=str(error))
     except RuntimeError as error:
         raise HTTPException(status_code=502, detail=f"AI service error: {error}")
-    except Exception:
-        raise HTTPException(status_code=500, detail="Failed to explain file.")

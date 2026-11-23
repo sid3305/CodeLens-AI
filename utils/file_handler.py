@@ -2,16 +2,14 @@
 import os
 import re
 import shutil
-import uuid
-import zipfile
 import subprocess
 import sys
-
+import uuid
+import zipfile
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 from utils.config import get_upload_dir
-
 
 # ---------------- CONFIGURATION ----------------
 
@@ -191,15 +189,8 @@ def extract_zip(zip_path):
 
             destination.parent.mkdir(parents=True, exist_ok=True)
 
-            with zip_ref.open(info) as source:
-                with open(destination, "wb") as target:
-                    while True:
-                        chunk = source.read(64 * 1024)
-
-                        if not chunk:
-                            break
-
-                        target.write(chunk)
+            with zip_ref.open(info) as source, open(destination, "wb") as target:
+                shutil.copyfileobj(source, target, 64 * 1024)
 
     return str(extract_folder)
 

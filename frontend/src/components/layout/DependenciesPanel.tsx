@@ -16,11 +16,12 @@ import {
   Network,
 } from 'lucide-react'
 
-import { Fragment, useEffect, useState, useCallback } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import {
   api,
+  errorMessage,
   type DependenciesAnalysisResponse,
   type CircularDependency,
   type ExternalDependency,
@@ -30,7 +31,6 @@ import type { Repository } from '../../types'
 
 interface DependenciesPanelProps {
   repository: Repository | null
-  onRefresh?: () => void
 }
 
 function StatCard({
@@ -176,40 +176,62 @@ function ModuleDependencyList({
   )
 }
 
+/** A fetch result tagged with the repository and refresh generation it answers. */
+interface LoadedAnalysis {
+  repoId: string
+  generation: number
+  data: DependenciesAnalysisResponse | null
+  error: string | null
+}
+
 export default function DependenciesPanel({
   repository,
-  onRefresh,
 }: DependenciesPanelProps) {
-  const [analysis, setAnalysis] = useState<DependenciesAnalysisResponse | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'overview' | 'circular' | 'external' | 'modules'>('overview')
+  const [generation, setGeneration] = useState(0)
+  const [loaded, setLoaded] = useState<LoadedAnalysis | null>(null)
 
-  const loadDependencies = useCallback(async () => {
-    if (!repository) return
-
-    setLoading(true)
-    setError(null)
-
-    try {
-      const result = await api.getDependenciesAnalysis(repository.id)
-      setAnalysis(result)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dependencies')
-    } finally {
-      setLoading(false)
-    }
-  }, [repository])
+  // Keyed on the repository id (not the object, which is recreated on every
+  // repository-list refresh) and an explicit refresh generation.
+  const repositoryId = repository?.id ?? null
 
   useEffect(() => {
-    if (repository) {
-      loadDependencies()
+    if (!repositoryId) return
+
+    const requested = generation
+    let cancelled = false
+
+    api.getDependenciesAnalysis(repositoryId).then(
+      (data) => {
+        if (!cancelled) {
+          setLoaded({ repoId: repositoryId, generation: requested, data, error: null })
+        }
+      },
+      (err: unknown) => {
+        if (!cancelled) {
+          setLoaded({
+            repoId: repositoryId,
+            generation: requested,
+            data: null,
+            error: errorMessage(err, 'Failed to load dependencies'),
+          })
+        }
+      },
+    )
+
+    return () => {
+      cancelled = true
     }
-  }, [repository, loadDependencies])
+  }, [repositoryId, generation])
+
+  const current = loaded && loaded.repoId === repositoryId ? loaded : null
+  // While refreshing the same repository the previous result stays visible.
+  const analysis = current?.data ?? null
+  const error = current?.error ?? null
+  const loading = current === null || current.generation !== generation
 
   const handleRefresh = () => {
-    loadDependencies()
-    onRefresh?.()
+    setGeneration((value) => value + 1)
   }
 
   if (!repository) {
@@ -240,7 +262,8 @@ export default function DependenciesPanel({
             className="icon-button"
             onClick={handleRefresh}
             disabled={loading}
-            title="Refresh dependencies analysis"
+            title="Refresh dependency analysis"
+            aria-label="Refresh dependency analysis"
           >
             <RefreshCw size={16} className={loading ? 'spin' : ''} />
           </button>
@@ -248,10 +271,16 @@ export default function DependenciesPanel({
       </div>
 
       {error && (
-        <div className="error-banner">
+        <div className="error-banner" role="alert">
           <AlertTriangle size={16} />
           <span>{error}</span>
-          <button className="icon-button small" onClick={loadDependencies}>
+          <button
+            type="button"
+            className="icon-button small"
+            onClick={handleRefresh}
+            aria-label="Retry dependency analysis"
+            title="Retry"
+          >
             <RotateCcw size={14} />
           </button>
         </div>

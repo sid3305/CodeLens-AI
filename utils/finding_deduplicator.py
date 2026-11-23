@@ -1,11 +1,7 @@
 
 import hashlib
-import re
 
-from utils.severity_classifier import (
-    get_highest_severity,
-    get_highest_confidence
-)
+from utils.severity_classifier import get_highest_confidence, get_highest_severity
 
 
 def get_vulnerability_family(finding):
@@ -14,7 +10,6 @@ def get_vulnerability_family(finding):
     and finding descriptions.
     """
 
-    tool = finding.get("tool", "")
     rule = str(finding.get("rule_id", "")).lower()
     title = str(finding.get("title", "")).lower()
     description = str(finding.get("description", "")).lower()

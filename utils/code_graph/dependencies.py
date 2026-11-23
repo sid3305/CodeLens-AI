@@ -10,26 +10,22 @@ Extracts and analyzes dependencies within a codebase:
 
 import json
 import re
-from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional, Any
-from collections import defaultdict
 from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
 
-import networkx as nx
-
-from utils.code_graph.models import CodeNode, CodeEdge, NodeType, EdgeType
 from utils.code_graph.graph_builder import CodeGraphBuilder
-from utils.code_graph.base import ParserRegistry
+from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, NodeType
 
 
 @dataclass
 class ExternalDependency:
     """Represents an external (third-party) dependency."""
     name: str
-    source_files: List[str] = field(default_factory=list)
+    source_files: list[str] = field(default_factory=list)
     import_count: int = 0
     language: str = ""
-    version: Optional[str] = None
+    version: str | None = None
     is_dev_dependency: bool = False
 
 
@@ -39,14 +35,14 @@ class ModuleDependency:
     source_module: str
     target_module: str
     import_type: str  # 'internal', 'external', 'relative'
-    imports: List[str] = field(default_factory=list)
+    imports: list[str] = field(default_factory=list)
     edge_count: int = 1
 
 
 @dataclass
 class CircularDependency:
     """Represents a circular dependency chain."""
-    cycle: List[str]
+    cycle: list[str]
     cycle_type: str  # 'import', 'module'
     severity: str  # 'critical', 'high', 'medium', 'low'
     description: str = ""
@@ -58,20 +54,20 @@ class DependenciesAnalysisResult:
     repository_id: str
     total_internal_modules: int
     total_external_dependencies: int
-    circular_dependencies: List[CircularDependency]
-    module_dependencies: List[ModuleDependency]
-    external_dependencies: List[ExternalDependency]
-    dependency_graph_data: Dict[str, Any]  # For frontend visualization
-    language_breakdown: Dict[str, Dict[str, int]]
+    circular_dependencies: list[CircularDependency]
+    module_dependencies: list[ModuleDependency]
+    external_dependencies: list[ExternalDependency]
+    dependency_graph_data: dict[str, Any]  # For frontend visualization
+    language_breakdown: dict[str, dict[str, int]]
     generated_at: str
 
 
-def parse_requirements_txt(content: str) -> List[Dict[str, str]]:
+def parse_requirements_txt(content: str) -> list[dict[str, str]]:
     """Parse requirements.txt and return list of dependencies with versions."""
     deps = []
     for line in content.splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("-"):
+        if not line or line.startswith(("#", "-")):
             continue
         # Handle various formats: package==1.0.0, package>=1.0.0, package
         match = re.match(r'^([A-Za-z0-9_.-]+)([=<>!~]+.*)?$', line)
@@ -82,7 +78,7 @@ def parse_requirements_txt(content: str) -> List[Dict[str, str]]:
     return deps
 
 
-def parse_package_json(content: str) -> Dict[str, Any]:
+def parse_package_json(content: str) -> dict[str, Any]:
     """Parse package.json and return dependencies."""
     try:
         data = json.loads(content)
@@ -96,20 +92,18 @@ def parse_package_json(content: str) -> Dict[str, Any]:
         return {}
 
 
-def parse_pyproject_toml(content: str) -> Dict[str, Any]:
+def parse_pyproject_toml(content: str) -> dict[str, Any]:
     """Parse pyproject.toml for dependencies (basic regex parsing)."""
     # This is a simplified parser - for full TOML support, use tomli/tomllib
     deps = {"dependencies": {}, "dev_dependencies": {}}
 
     # Find [project] dependencies
-    in_project = False
     in_deps = False
     in_optional = False
 
     for line in content.splitlines():
         line = line.strip()
         if line.startswith("[") and line.endswith("]"):
-            in_project = line == "[project]"
             in_deps = line == "[project.dependencies]"
             in_optional = line.startswith("[project.optional-dependencies]")
             continue
@@ -130,28 +124,27 @@ def parse_pyproject_toml(content: str) -> Dict[str, Any]:
 
 
 def extract_external_deps_from_imports(
-    nodes: List[CodeNode],
-    edges: List[CodeEdge],
+    nodes: list[CodeNode],
+    edges: list[CodeEdge],
     repo_path: Path
-) -> List[ExternalDependency]:
+) -> list[ExternalDependency]:
     """Extract external dependencies from import nodes and manifest files."""
-    external_deps: Dict[str, ExternalDependency] = {}
+    external_deps: dict[str, ExternalDependency] = {}
 
     # From import nodes
     for node in nodes:
-        if node.node_type == NodeType.IMPORT:
-            # Heuristic: external if not relative import
-            if not node.name.startswith(".") and not node.name.startswith("@"):
-                base_name = node.name.split("/")[0].split(".")[0]
-                if base_name not in external_deps:
-                    external_deps[base_name] = ExternalDependency(
-                        name=base_name,
-                        language=node.language,
-                    )
-                dep = external_deps[base_name]
-                dep.import_count += 1
-                if node.file_path not in dep.source_files:
-                    dep.source_files.append(node.file_path)
+        # Heuristic: external if not relative import
+        if node.node_type == NodeType.IMPORT and not node.name.startswith((".", "@")):
+            base_name = node.name.split("/")[0].split(".")[0]
+            if base_name not in external_deps:
+                external_deps[base_name] = ExternalDependency(
+                    name=base_name,
+                    language=node.language,
+                )
+            dep = external_deps[base_name]
+            dep.import_count += 1
+            if node.file_path not in dep.source_files:
+                dep.source_files.append(node.file_path)
 
     # From manifest files
     manifest_files = {
@@ -208,10 +201,10 @@ def extract_external_deps_from_imports(
 
 
 def build_module_dependency_graph(
-    nodes: List[CodeNode],
-    edges: List[CodeEdge],
+    nodes: list[CodeNode],
+    edges: list[CodeEdge],
     repo_path: Path
-) -> Tuple[List[ModuleDependency], Dict[str, Set[str]]]:
+) -> tuple[list[ModuleDependency], dict[str, set[str]]]:
     """Build module-level dependency graph from file-level imports."""
     builder = CodeGraphBuilder()
     builder.build(nodes, edges)
@@ -252,9 +245,9 @@ def build_module_dependency_graph(
 
 
 def find_circular_dependencies(
-    nodes: List[CodeNode],
-    edges: List[CodeEdge]
-) -> List[CircularDependency]:
+    nodes: list[CodeNode],
+    edges: list[CodeEdge]
+) -> list[CircularDependency]:
     """Find circular import dependencies at module level."""
     builder = CodeGraphBuilder()
     builder.build(nodes, edges)
@@ -268,9 +261,7 @@ def find_circular_dependencies(
         file_cycle = []
         for node_id in cycle:
             node = next((n for n in nodes if n.id == node_id), None)
-            if node and node.node_type == NodeType.FILE:
-                file_cycle.append(node.file_path)
-            elif node:
+            if node and node.node_type == NodeType.FILE or node:
                 file_cycle.append(node.file_path)
 
         # Deduplicate consecutive files
@@ -297,8 +288,8 @@ def find_circular_dependencies(
 def analyze_dependencies(
     repo_id: str,
     repo_path: Path,
-    nodes: List[CodeNode],
-    edges: List[CodeEdge]
+    nodes: list[CodeNode],
+    edges: list[CodeEdge]
 ) -> DependenciesAnalysisResult:
     """Main entry point for dependencies analysis."""
     from datetime import datetime, timezone
@@ -359,10 +350,10 @@ def analyze_dependencies(
 
 
 def _build_module_graph_for_frontend(
-    nodes: List[CodeNode],
-    file_deps: Dict[str, Set[str]],
-    module_deps: List[ModuleDependency]
-) -> Dict[str, Any]:
+    nodes: list[CodeNode],
+    file_deps: dict[str, set[str]],
+    module_deps: list[ModuleDependency]
+) -> dict[str, Any]:
     """Build a module-level graph for React Flow visualization."""
     file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
 
@@ -404,7 +395,7 @@ def _build_module_graph_for_frontend(
     }
 
 
-def get_dependency_stats(nodes: List[CodeNode], edges: List[CodeEdge]) -> Dict[str, Any]:
+def get_dependency_stats(nodes: list[CodeNode], edges: list[CodeEdge]) -> dict[str, Any]:
     """Get quick dependency statistics."""
     builder = CodeGraphBuilder()
     builder.build(nodes, edges)

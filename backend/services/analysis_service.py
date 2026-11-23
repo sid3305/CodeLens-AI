@@ -4,13 +4,11 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from utils.security import redact_secrets
-
-from utils.analysis_engine import run_all_analyzers
-from utils.config import get_upload_dir
 
 from backend.services.repository_service import get_repository
-
+from utils.analysis_engine import run_all_analyzers
+from utils.config import get_upload_dir
+from utils.security import redact_secrets
 
 _analysis_lock = Lock()
 

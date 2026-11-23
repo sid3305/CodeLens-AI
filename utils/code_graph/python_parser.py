@@ -1,17 +1,17 @@
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set, Tuple
-from tree_sitter import Language, Parser, Node as TSNode
+
+from tree_sitter import Language, Parser
+from tree_sitter import Node as TSNode
 
 from utils.code_graph.base import BaseParser, ParserRegistry
-from utils.code_graph.models import CodeNode, CodeEdge, NodeType, EdgeType, FileSummary
-
+from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, FileSummary, NodeType
 
 # Load Python grammar
 try:
     import tree_sitter_python as tspython
     PY_LANGUAGE = Language(tspython.language())
-except Exception:
+except (ImportError, OSError, TypeError, ValueError):  # grammar missing or incompatible
     PY_LANGUAGE = None
 
 
@@ -28,10 +28,10 @@ class PythonParser(BaseParser):
         return "python"
 
     @property
-    def file_extensions(self) -> List[str]:
+    def file_extensions(self) -> list[str]:
         return [".py"]
 
-    def parse_file(self, file_path: Path, content: str) -> List[CodeNode]:
+    def parse_file(self, file_path: Path, content: str) -> list[CodeNode]:
         if not PY_LANGUAGE:
             return []
 
@@ -61,7 +61,7 @@ class PythonParser(BaseParser):
         return nodes
 
     def _extract_nodes(self, node: TSNode, content: str, file_path: str,
-                       nodes: List[CodeNode], parent_id: str) -> None:
+                       nodes: list[CodeNode], parent_id: str) -> None:
         """Recursively extract nodes from AST."""
 
         if node.type == "function_definition":
@@ -104,7 +104,7 @@ class PythonParser(BaseParser):
             self._extract_nodes(child, content, file_path, nodes, parent_id)
 
     def _make_function_node(self, node: TSNode, content: str, file_path: str,
-                            parent_id: str, is_async: bool = False) -> Optional[CodeNode]:
+                            parent_id: str, is_async: bool = False) -> CodeNode | None:
         name_node = node.child_by_field_name("name")
         if not name_node:
             return None
@@ -143,7 +143,7 @@ class PythonParser(BaseParser):
         )
 
     def _make_class_node(self, node: TSNode, content: str, file_path: str,
-                         parent_id: str) -> Optional[CodeNode]:
+                         parent_id: str) -> CodeNode | None:
         name_node = node.child_by_field_name("name")
         if not name_node:
             return None
@@ -151,13 +151,7 @@ class PythonParser(BaseParser):
         name = content[name_node.start_byte:name_node.end_byte]
         qualified_name = self._build_qualified_name(parent_id, name)
 
-        # Extract base classes
-        bases = []
-        superclasses = node.child_by_field_name("superclasses")
-        if superclasses:
-            bases_text = content[superclasses.start_byte:superclasses.end_byte]
-            # Parse bases like (Base1, Base2)
-            bases = re.findall(r'([A-Za-z_][A-Za-z0-9_]*)', bases_text)
+        # Base classes are not recorded yet (BUG-31: no INHERITS edges).
 
         decorators = self._extract_decorators(node, content)
 
@@ -176,7 +170,7 @@ class PythonParser(BaseParser):
         )
 
     def _make_import_nodes(self, node: TSNode, content: str, file_path: str,
-                           parent_id: str) -> List[CodeNode]:
+                           parent_id: str) -> list[CodeNode]:
         nodes = []
         import_text = content[node.start_byte:node.end_byte]
 
@@ -238,7 +232,7 @@ class PythonParser(BaseParser):
         return nodes
 
     def _make_variable_nodes(self, node: TSNode, content: str, file_path: str,
-                             parent_id: str) -> List[CodeNode]:
+                             parent_id: str) -> list[CodeNode]:
         nodes = []
         # Simple assignment: VAR = value
         left = node.child_by_field_name("left")
@@ -259,9 +253,8 @@ class PythonParser(BaseParser):
                 ))
         return nodes
 
-    def extract_edges(self, nodes: List[CodeNode], content: str) -> List[CodeEdge]:
+    def extract_edges(self, nodes: list[CodeNode], content: str) -> list[CodeEdge]:
         edges = []
-        node_by_id = {n.id: n for n in nodes}
         file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
 
         if not file_nodes:
@@ -286,9 +279,9 @@ class PythonParser(BaseParser):
         return edges
 
     def _extract_call_edges(self, node: TSNode, content: str, file_path: str,
-                            func_nodes: Dict[str, CodeNode],
-                            class_nodes: Dict[str, CodeNode],
-                            edges: List[CodeEdge]) -> None:
+                            func_nodes: dict[str, CodeNode],
+                            class_nodes: dict[str, CodeNode],
+                            edges: list[CodeEdge]) -> None:
         """Extract function call edges within the file."""
 
         if node.type == "call":
@@ -313,7 +306,7 @@ class PythonParser(BaseParser):
         for child in node.children:
             self._extract_call_edges(child, content, file_path, func_nodes, class_nodes, edges)
 
-    def _get_call_name(self, node: TSNode, content: str) -> Optional[str]:
+    def _get_call_name(self, node: TSNode, content: str) -> str | None:
         """Extract the name being called."""
         if node.type == "identifier":
             return content[node.start_byte:node.end_byte]
@@ -325,22 +318,22 @@ class PythonParser(BaseParser):
         return None
 
     def _match_call_to_function(self, call_name: str,
-                                func_nodes: Dict[str, CodeNode],
-                                class_nodes: Dict[str, CodeNode],
-                                file_path: str) -> Optional[CodeNode]:
+                                func_nodes: dict[str, CodeNode],
+                                class_nodes: dict[str, CodeNode],
+                                file_path: str) -> CodeNode | None:
         """Match a call name to a known function in the same file."""
         # Direct match - qualified names use : as separator
         for qname, node in func_nodes.items():
-            if qname.endswith(f":{call_name}") or qname.endswith(f".{call_name}") or qname == call_name:
+            if qname.endswith((f":{call_name}", f".{call_name}")) or qname == call_name:
                 return node
         # Method on class
         for qname, node in class_nodes.items():
-            if qname.endswith(f":{call_name}") or qname.endswith(f".{call_name}"):
+            if qname.endswith((f":{call_name}", f".{call_name}")):
                 return node
         return None
 
     def _find_enclosing_function(self, node: TSNode, content: str,
-                                 func_nodes: Dict[str, CodeNode]) -> Optional[CodeNode]:
+                                 func_nodes: dict[str, CodeNode]) -> CodeNode | None:
         """Find the function that contains this call."""
         parent = node.parent
         while parent:
@@ -349,13 +342,13 @@ class PythonParser(BaseParser):
                 if name_node:
                     caller_name = content[name_node.start_byte:name_node.end_byte]
                     for qname, func_node in func_nodes.items():
-                        if (qname.endswith(f":{caller_name}") or qname.endswith(f".{caller_name}") or qname == caller_name) and \
+                        if (qname.endswith((f":{caller_name}", f".{caller_name}")) or qname == caller_name) and \
                            func_node.line_start <= node.start_point[0] + 1 <= func_node.line_end:
                             return func_node
             parent = parent.parent
         return None
 
-    def _extract_containment_edges(self, nodes: List[CodeNode], edges: List[CodeEdge]) -> None:
+    def _extract_containment_edges(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> None:
         """CONTAINS edges: file -> classes/functions, class -> methods."""
         file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
         if not file_nodes:
@@ -383,7 +376,7 @@ class PythonParser(BaseParser):
                         ))
                         break
 
-    def _extract_import_edges(self, nodes: List[CodeNode], edges: List[CodeEdge]) -> None:
+    def _extract_import_edges(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> None:
         """IMPORTS edges: file -> import nodes."""
         file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
         if not file_nodes:
@@ -400,15 +393,14 @@ class PythonParser(BaseParser):
                     line=node.line_start,
                 ))
 
-    def _extract_inheritance_edges(self, nodes: List[CodeNode],
-                                   class_nodes: Dict[str, CodeNode],
-                                   edges: List[CodeEdge]) -> None:
+    def _extract_inheritance_edges(self, nodes: list[CodeNode],
+                                   class_nodes: dict[str, CodeNode],
+                                   edges: list[CodeEdge]) -> None:
         """INHERITS edges between classes."""
         # This would need more sophisticated parsing of base classes
         # For now, skip - can be enhanced later
-        pass
 
-    def get_file_summary(self, file_path: Path, nodes: List[CodeNode]) -> FileSummary:
+    def get_file_summary(self, file_path: Path, nodes: list[CodeNode]) -> FileSummary:
         file_nodes = [n for n in nodes if n.file_path == str(file_path)]
         funcs = [n for n in file_nodes if n.node_type == NodeType.FUNCTION]
         classes = [n for n in file_nodes if n.node_type == NodeType.CLASS]
@@ -426,7 +418,7 @@ class PythonParser(BaseParser):
         return FileSummary(
             file_path=str(file_path),
             language="python",
-            lines_of_code=([n for n in file_nodes if n.node_type == NodeType.FILE][0].line_end) if file_nodes else 0,
+            lines_of_code=(next(n for n in file_nodes if n.node_type == NodeType.FILE).line_end) if file_nodes else 0,
             node_count=len(file_nodes),
             function_count=len(funcs),
             class_count=len(classes),
@@ -444,7 +436,7 @@ class PythonParser(BaseParser):
             return f"{file_part}:{name}"
         return f"{parent_id}.{name}"
 
-    def _extract_parameters(self, params_node: TSNode, content: str) -> List[str]:
+    def _extract_parameters(self, params_node: TSNode, content: str) -> list[str]:
         params = []
         for child in params_node.children:
             if child.type == "identifier":
@@ -455,14 +447,14 @@ class PythonParser(BaseParser):
                     params.append(content[name_node.start_byte:name_node.end_byte])
         return params
 
-    def _extract_decorators(self, node: TSNode, content: str) -> List[str]:
+    def _extract_decorators(self, node: TSNode, content: str) -> list[str]:
         decorators = []
         for child in node.children:
             if child.type == "decorator":
                 decorators.append(content[child.start_byte:child.end_byte].strip())
         return decorators
 
-    def _calculate_complexity(self, node: TSNode, content: str) -> Optional[int]:
+    def _calculate_complexity(self, node: TSNode, content: str) -> int | None:
         """Simple cyclomatic complexity: 1 + number of decision points."""
         complexity = 1
         decision_types = {"if_statement", "while_statement", "for_statement",

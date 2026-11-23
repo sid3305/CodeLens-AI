@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Iterator
 from pathlib import Path
+from typing import ClassVar
 
-from utils.code_graph.models import CodeNode, CodeEdge, NodeType, EdgeType, FileSummary
+from utils.code_graph.models import CodeEdge, CodeNode, FileSummary
 
 
 class BaseParser(ABC):
@@ -12,36 +12,31 @@ class BaseParser(ABC):
     @abstractmethod
     def language_name(self) -> str:
         """Language identifier (e.g., 'python', 'javascript', 'typescript')."""
-        pass
 
     @property
     @abstractmethod
-    def file_extensions(self) -> List[str]:
+    def file_extensions(self) -> list[str]:
         """File extensions this parser handles (e.g., ['.py'], ['.js', '.jsx', '.ts', '.tsx'])."""
-        pass
 
     @abstractmethod
-    def parse_file(self, file_path: Path, content: str) -> List[CodeNode]:
+    def parse_file(self, file_path: Path, content: str) -> list[CodeNode]:
         """
         Parse a single file and return all nodes found.
 
         Returns nodes for: files, classes, functions, methods, imports, variables.
         """
-        pass
 
     @abstractmethod
-    def extract_edges(self, nodes: List[CodeNode], content: str) -> List[CodeEdge]:
+    def extract_edges(self, nodes: list[CodeNode], content: str) -> list[CodeEdge]:
         """
         Extract edges (relationships) between nodes within a file.
 
         Returns edges for: CALLS, CONTAINS, IMPORTS, INHERITS, DEFINES, REFERENCES.
         """
-        pass
 
     @abstractmethod
-    def get_file_summary(self, file_path: Path, nodes: List[CodeNode]) -> FileSummary:
+    def get_file_summary(self, file_path: Path, nodes: list[CodeNode]) -> FileSummary:
         """Generate a summary of the file's graph information."""
-        pass
 
     # Common utility methods that can be overridden
 
@@ -53,7 +48,7 @@ class BaseParser(ABC):
         """Determine if a node is exported/public (override per language)."""
         return False
 
-    def calculate_complexity(self, node: CodeNode, content: str) -> Optional[int]:
+    def calculate_complexity(self, node: CodeNode, content: str) -> int | None:
         """Calculate cyclomatic complexity (override per language)."""
         return None
 
@@ -61,7 +56,7 @@ class BaseParser(ABC):
 class ParserRegistry:
     """Registry for language parsers."""
 
-    _parsers: Dict[str, BaseParser] = {}
+    _parsers: ClassVar[dict[str, BaseParser]] = {}
 
     @classmethod
     def register(cls, parser: BaseParser) -> None:
@@ -71,16 +66,16 @@ class ParserRegistry:
             cls._parsers[ext] = parser
 
     @classmethod
-    def get_parser(cls, language_or_extension: str) -> Optional[BaseParser]:
+    def get_parser(cls, language_or_extension: str) -> BaseParser | None:
         """Get parser by language name or file extension."""
         return cls._parsers.get(language_or_extension.lower())
 
     @classmethod
-    def get_parser_for_file(cls, file_path: Path) -> Optional[BaseParser]:
+    def get_parser_for_file(cls, file_path: Path) -> BaseParser | None:
         """Get appropriate parser for a file path."""
         return cls.get_parser(file_path.suffix.lower())
 
     @classmethod
-    def supported_languages(cls) -> List[str]:
+    def supported_languages(cls) -> list[str]:
         """Get list of supported language names."""
         return [p.language_name for p in set(cls._parsers.values())]

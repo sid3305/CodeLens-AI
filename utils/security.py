@@ -2,7 +2,6 @@
 import re
 from pathlib import Path
 
-
 # -----------------------------------
 # Sensitive files
 # -----------------------------------
@@ -29,10 +28,7 @@ def is_sensitive_file(file_path):
     if filename in SENSITIVE_FILENAMES:
         return True
 
-    if filename.startswith(".env"):
-        return True
-
-    return False
+    return filename.startswith(".env")
 
 
 # -----------------------------------
@@ -43,8 +39,10 @@ SECRET_PATTERNS = [
 
     # API keys and tokens
     (
-        r'(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|'
-        r'client[_-]?secret)\s*[:=]\s*["\']?[^"\'\s,;]+',
+        (
+            r'(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|'
+            r'client[_-]?secret)\s*[:=]\s*["\']?[^"\'\s,;]+'
+        ),
         r'\1=[REDACTED]'
     ),
 
@@ -56,8 +54,10 @@ SECRET_PATTERNS = [
 
     # Common cloud credentials
     (
-        r'(?i)(aws_secret_access_key|aws_access_key_id)\s*[:=]\s*'
-        r'["\']?[^"\'\s,;]+',
+        (
+            r'(?i)(aws_secret_access_key|aws_access_key_id)\s*[:=]\s*'
+            r'["\']?[^"\'\s,;]+'
+        ),
         r'\1=[REDACTED]'
     ),
 
@@ -75,8 +75,10 @@ SECRET_PATTERNS = [
 
     # Private key blocks
     (
-        r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
-        r'.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----',
+        (
+            r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
+            r'.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
+        ),
         '[REDACTED_PRIVATE_KEY]'
     ),
 

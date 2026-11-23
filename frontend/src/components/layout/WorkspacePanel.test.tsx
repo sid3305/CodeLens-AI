@@ -22,8 +22,8 @@ vi.mock('../../services/api', async (importOriginal) => {
 
 const mockedApi = api as unknown as Record<string, ReturnType<typeof vi.fn>>
 
-const repoA: Repository = { id: 'aaaa', name: 'repo-a', source: 'zip', file_count: 2 }
-const repoB: Repository = { id: 'bbbb', name: 'repo-b', source: 'zip', file_count: 2 }
+const repoA: Repository = { id: 'aaaa', name: 'repo-a', source: 'zip', file_count: 2, created_at: '' }
+const repoB: Repository = { id: 'bbbb', name: 'repo-b', source: 'zip', file_count: 2, created_at: '' }
 
 function summaryFor(repo: Repository) {
   return {

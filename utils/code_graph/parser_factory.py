@@ -1,15 +1,24 @@
+import logging
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any
+
 from utils.code_graph.base import BaseParser, ParserRegistry
-from utils.code_graph.models import CodeNode, CodeEdge, FileSummary, GraphSummary, EdgeType
+from utils.code_graph.models import (
+    CodeEdge,
+    CodeNode,
+    EdgeType,
+    FileSummary,
+    GraphSummary,
+)
 
+logger = logging.getLogger(__name__)
 
-def get_parser_for_file(file_path: Path) -> Optional[BaseParser]:
+def get_parser_for_file(file_path: Path) -> BaseParser | None:
     """Get the appropriate parser for a file."""
     return ParserRegistry.get_parser_for_file(file_path)
 
 
-def get_supported_extensions() -> List[str]:
+def get_supported_extensions() -> list[str]:
     """Get all supported file extensions."""
     extensions = set()
     for parser in set(ParserRegistry._parsers.values()):
@@ -18,7 +27,7 @@ def get_supported_extensions() -> List[str]:
     return sorted(extensions)
 
 
-def parse_repository(file_paths: List[Path], read_file_func) -> Dict[str, Any]:
+def parse_repository(file_paths: list[Path], read_file_func) -> dict[str, Any]:
     """
     Parse all files in a repository.
 
@@ -29,9 +38,9 @@ def parse_repository(file_paths: List[Path], read_file_func) -> Dict[str, Any]:
     Returns:
         Dict with 'nodes', 'edges', 'file_summaries', 'graph_summary'
     """
-    all_nodes: List[CodeNode] = []
-    all_edges: List[CodeEdge] = []
-    file_summaries: List[FileSummary] = []
+    all_nodes: list[CodeNode] = []
+    all_edges: list[CodeEdge] = []
+    file_summaries: list[FileSummary] = []
 
     for file_path in file_paths:
         parser = get_parser_for_file(file_path)
@@ -55,8 +64,10 @@ def parse_repository(file_paths: List[Path], read_file_func) -> Dict[str, Any]:
             summary = parser.get_file_summary(file_path, nodes)
             file_summaries.append(summary)
 
-        except Exception as e:
-            # Skip files that fail to parse
+        # Tree-sitter grammars can fail in many ways on unusual input; one
+        # unparseable file must not abort the whole repository.
+        except Exception as error:  # noqa: BLE001
+            logger.warning("Skipping %s: %s", file_path, error)
             continue
 
     # Cross-file edges (imports -> definitions)
@@ -74,7 +85,7 @@ def parse_repository(file_paths: List[Path], read_file_func) -> Dict[str, Any]:
     }
 
 
-def _extract_cross_file_edges(nodes: List[CodeNode]) -> List[CodeEdge]:
+def _extract_cross_file_edges(nodes: list[CodeNode]) -> list[CodeEdge]:
     """Extract edges between files (imports -> definitions)."""
     edges = []
 
@@ -103,8 +114,8 @@ def _extract_cross_file_edges(nodes: List[CodeNode]) -> List[CodeEdge]:
     return edges
 
 
-def _build_graph_summary(nodes: List[CodeNode], edges: List[CodeEdge],
-                         file_summaries: List[FileSummary]) -> GraphSummary:
+def _build_graph_summary(nodes: list[CodeNode], edges: list[CodeEdge],
+                         file_summaries: list[FileSummary]) -> GraphSummary:
     """Build a summary of the entire repository graph."""
     from collections import Counter
 
@@ -139,7 +150,7 @@ def _build_graph_summary(nodes: List[CodeNode], edges: List[CodeEdge],
     )
 
 
-def _find_cycles(import_edges: List[tuple], nodes: List[CodeNode]) -> List[List[str]]:
+def _find_cycles(import_edges: list[tuple], nodes: list[CodeNode]) -> list[list[str]]:
     """Find circular import dependencies."""
     import networkx as nx
 
@@ -153,11 +164,11 @@ def _find_cycles(import_edges: List[tuple], nodes: List[CodeNode]) -> List[List[
     try:
         cycles = list(nx.simple_cycles(G))
         return cycles[:20]  # Limit to 20 cycles
-    except Exception:
+    except nx.NetworkXException:
         return []
 
 
-def _find_dead_code(nodes: List[CodeNode], edges: List[CodeEdge]) -> List[str]:
+def _find_dead_code(nodes: list[CodeNode], edges: list[CodeEdge]) -> list[str]:
     """Find functions/classes with no incoming CALLS edges that aren't entry points/exported."""
     # Build incoming call count
     call_edges = [(e.source, e.target) for e in edges if e.edge_type.name == "CALLS"]
@@ -167,14 +178,18 @@ def _find_dead_code(nodes: List[CodeNode], edges: List[CodeEdge]) -> List[str]:
 
     dead = []
     for node in nodes:
-        if node.node_type.name in ("FUNCTION", "METHOD", "CLASS"):
-            if node.id not in incoming_calls and not node.is_entry_point and not node.is_exported:
-                dead.append(node.id)
+        if (
+            node.node_type.name in ("FUNCTION", "METHOD", "CLASS")
+            and node.id not in incoming_calls
+            and not node.is_entry_point
+            and not node.is_exported
+        ):
+            dead.append(node.id)
 
     return dead[:50]  # Limit
 
 
-def _find_hotspots(nodes: List[CodeNode], edges: List[CodeEdge]) -> List[str]:
+def _find_hotspots(nodes: list[CodeNode], edges: list[CodeEdge]) -> list[str]:
     """Find high complexity + high fan-in nodes."""
     # Fan-in from CALLS edges
     call_edges = [(e.source, e.target) for e in edges if e.edge_type.name == "CALLS"]
@@ -194,8 +209,8 @@ def _find_hotspots(nodes: List[CodeNode], edges: List[CodeEdge]) -> List[str]:
     return [node_id for score, node_id in scored[:20]]  # Top 20
 
 
-def summarize_graph_for_frontend(nodes: List[CodeNode], edges: List[CodeEdge],
-                                  max_nodes: int = 300) -> Dict[str, Any]:
+def summarize_graph_for_frontend(nodes: list[CodeNode], edges: list[CodeEdge],
+                                  max_nodes: int = 300) -> dict[str, Any]:
     """
     Create a summarized graph for frontend visualization.
     Groups by folder, limits nodes, adds click-to-expand metadata.

@@ -925,10 +925,7 @@ const filteredFindings = findings.filter((finding) => {
     )}
   </>
         ) : isArchitecture ? (
-          <DependenciesPanel
-            repository={repository}
-            onRefresh={onRefresh}
-          />
+          <DependenciesPanel repository={repository} />
         ) : isFilePreview && selectedFilePath ? (
   <section className="content-section">
     <div className="section-title-row">

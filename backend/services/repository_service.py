@@ -11,15 +11,14 @@ from fastapi import UploadFile
 from utils.config import get_registry_file, get_upload_dir
 from utils.file_handler import (
     MAX_ARCHIVE_SIZE,
+    clone_github_repo,
     create_workspace,
     extract_zip,
-    clone_github_repo,
     get_code_files,
     remove_tree,
 )
-from utils.security import is_sensitive_file
 from utils.parser import read_file_content
-
+from utils.security import is_sensitive_file
 
 _registry_lock = Lock()
 

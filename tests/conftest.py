@@ -75,5 +75,6 @@ def client():
 
     from backend.main import app
 
-    with TestClient(app) as test_client:
+    # Like a real server: unhandled errors become 500 responses.
+    with TestClient(app, raise_server_exceptions=False) as test_client:
         yield test_client

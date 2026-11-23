@@ -6,7 +6,6 @@ from backend.services.analysis_service import (
     get_analysis_results,
 )
 
-
 router = APIRouter(
     prefix="/api/repositories",
     tags=["Repository Analysis"],
@@ -43,11 +42,6 @@ def run_repository_analysis(repo_id: str):
             detail=message,
         )
 
-    except Exception:
-        raise HTTPException(
-            status_code=500,
-            detail="Repository analysis failed unexpectedly.",
-        )
 
 
 @router.get("/{repo_id}/results")

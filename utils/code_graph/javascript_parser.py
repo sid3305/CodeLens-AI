@@ -1,11 +1,11 @@
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Set
-from tree_sitter import Language, Parser, Node as TSNode
+
+from tree_sitter import Language, Parser
+from tree_sitter import Node as TSNode
 
 from utils.code_graph.base import BaseParser, ParserRegistry
-from utils.code_graph.models import CodeNode, CodeEdge, NodeType, EdgeType, FileSummary
-
+from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, FileSummary, NodeType
 
 # Load JavaScript/TypeScript grammars
 try:
@@ -14,7 +14,7 @@ try:
     JS_LANGUAGE = Language(tsjavascript.language())
     TS_LANGUAGE = Language(tstypescript.language_typescript())
     TSX_LANGUAGE = Language(tstypescript.language_tsx())
-except Exception:
+except (ImportError, OSError, TypeError, ValueError):  # grammar missing or incompatible
     JS_LANGUAGE = None
     TS_LANGUAGE = None
     TSX_LANGUAGE = None
@@ -47,10 +47,10 @@ class JavaScriptParser(BaseParser):
         return "javascript"
 
     @property
-    def file_extensions(self) -> List[str]:
+    def file_extensions(self) -> list[str]:
         return [".js", ".jsx", ".ts", ".tsx"]
 
-    def parse_file(self, file_path: Path, content: str) -> List[CodeNode]:
+    def parse_file(self, file_path: Path, content: str) -> list[CodeNode]:
         parser = self._get_parser(file_path)
         language = self._detect_language(file_path)
 
@@ -93,7 +93,7 @@ class JavaScriptParser(BaseParser):
         return "javascript"
 
     def _extract_nodes(self, node: TSNode, content: str, file_path: str,
-                       nodes: List[CodeNode], parent_id: str, language: str) -> None:
+                       nodes: list[CodeNode], parent_id: str, language: str) -> None:
         """Recursively extract nodes from AST."""
 
         # Functions
@@ -142,7 +142,7 @@ class JavaScriptParser(BaseParser):
             self._extract_nodes(child, content, file_path, nodes, parent_id, language)
 
     def _make_function_node(self, node: TSNode, content: str, file_path: str,
-                            parent_id: str, language: str) -> Optional[CodeNode]:
+                            parent_id: str, language: str) -> CodeNode | None:
         name_node = node.child_by_field_name("name")
         name = content[name_node.start_byte:name_node.end_byte] if name_node else "anonymous"
 
@@ -169,7 +169,7 @@ class JavaScriptParser(BaseParser):
         )
 
     def _make_method_node(self, node: TSNode, content: str, file_path: str,
-                          parent_id: str, language: str) -> Optional[CodeNode]:
+                          parent_id: str, language: str) -> CodeNode | None:
         name_node = node.child_by_field_name("name")
         if not name_node:
             return None
@@ -198,7 +198,7 @@ class JavaScriptParser(BaseParser):
         )
 
     def _make_class_node(self, node: TSNode, content: str, file_path: str,
-                         parent_id: str, language: str) -> Optional[CodeNode]:
+                         parent_id: str, language: str) -> CodeNode | None:
         name_node = node.child_by_field_name("name")
         if not name_node:
             return None
@@ -220,7 +220,7 @@ class JavaScriptParser(BaseParser):
         )
 
     def _make_import_nodes(self, node: TSNode, content: str, file_path: str,
-                           parent_id: str, language: str) -> List[CodeNode]:
+                           parent_id: str, language: str) -> list[CodeNode]:
         nodes = []
         import_text = content[node.start_byte:node.end_byte]
 
@@ -278,7 +278,7 @@ class JavaScriptParser(BaseParser):
         return nodes
 
     def _make_variable_nodes(self, node: TSNode, content: str, file_path: str,
-                             parent_id: str, language: str) -> List[CodeNode]:
+                             parent_id: str, language: str) -> list[CodeNode]:
         nodes = []
         # const/let/var x = ...
         declarators = [c for c in node.children if c.type in ("variable_declarator", "lexical_declaration")]
@@ -302,23 +302,21 @@ class JavaScriptParser(BaseParser):
         return nodes
 
     def _handle_export(self, node: TSNode, content: str, file_path: str,
-                       nodes: List[CodeNode], parent_id: str, language: str) -> None:
+                       nodes: list[CodeNode], parent_id: str, language: str) -> None:
         """Mark exported nodes."""
         declaration = node.child_by_field_name("declaration")
-        if declaration:
-            # Find the node we already created and mark it exported
-            if declaration.type in ("function_declaration", "class_declaration"):
-                name_node = declaration.child_by_field_name("name")
-                if name_node:
-                    name = content[name_node.start_byte:name_node.end_byte]
-                    qualified_name = self._build_qualified_name(parent_id, name)
-                    for n in nodes:
-                        if n.qualified_name == qualified_name:
-                            n.is_exported = True
+        # Find the node we already created and mark it exported
+        if declaration and declaration.type in ("function_declaration", "class_declaration"):
+            name_node = declaration.child_by_field_name("name")
+            if name_node:
+                name = content[name_node.start_byte:name_node.end_byte]
+                qualified_name = self._build_qualified_name(parent_id, name)
+                for n in nodes:
+                    if n.qualified_name == qualified_name:
+                        n.is_exported = True
 
-    def extract_edges(self, nodes: List[CodeNode], content: str) -> List[CodeEdge]:
+    def extract_edges(self, nodes: list[CodeNode], content: str) -> list[CodeEdge]:
         edges = []
-        node_by_id = {n.id: n for n in nodes}
         file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
 
         if not file_nodes:
@@ -326,7 +324,6 @@ class JavaScriptParser(BaseParser):
 
         file_node = file_nodes[0]
         file_path = file_node.file_path
-        language = file_node.language
 
         parser = self._get_parser(Path(file_path))
         tree = parser.parse(content.encode("utf-8"))
@@ -342,9 +339,9 @@ class JavaScriptParser(BaseParser):
         return edges
 
     def _extract_call_edges(self, node: TSNode, content: str, file_path: str,
-                            func_nodes: Dict[str, CodeNode],
-                            class_nodes: Dict[str, CodeNode],
-                            edges: List[CodeEdge]) -> None:
+                            func_nodes: dict[str, CodeNode],
+                            class_nodes: dict[str, CodeNode],
+                            edges: list[CodeEdge]) -> None:
         if node.type == "call_expression":
             func = node.child_by_field_name("function")
             if func:
@@ -365,7 +362,7 @@ class JavaScriptParser(BaseParser):
         for child in node.children:
             self._extract_call_edges(child, content, file_path, func_nodes, class_nodes, edges)
 
-    def _get_js_call_name(self, node: TSNode, content: str) -> Optional[str]:
+    def _get_js_call_name(self, node: TSNode, content: str) -> str | None:
         if node.type == "identifier":
             return content[node.start_byte:node.end_byte]
         elif node.type == "member_expression":
@@ -376,22 +373,22 @@ class JavaScriptParser(BaseParser):
         return None
 
     def _match_call_to_function(self, call_name: str,
-                                func_nodes: Dict[str, CodeNode],
-                                class_nodes: Dict[str, CodeNode],
-                                file_path: str) -> Optional[CodeNode]:
+                                func_nodes: dict[str, CodeNode],
+                                class_nodes: dict[str, CodeNode],
+                                file_path: str) -> CodeNode | None:
         """Match a call name to a known function in the same file."""
         # Direct match - qualified names use : as separator
         for qname, node in func_nodes.items():
-            if qname.endswith(f":{call_name}") or qname.endswith(f".{call_name}") or qname == call_name:
+            if qname.endswith((f":{call_name}", f".{call_name}")) or qname == call_name:
                 return node
         # Method on class
         for qname, node in class_nodes.items():
-            if qname.endswith(f":{call_name}") or qname.endswith(f".{call_name}"):
+            if qname.endswith((f":{call_name}", f".{call_name}")):
                 return node
         return None
 
     def _find_enclosing_function(self, node: TSNode, content: str,
-                                 func_nodes: Dict[str, CodeNode]) -> Optional[CodeNode]:
+                                 func_nodes: dict[str, CodeNode]) -> CodeNode | None:
         parent = node.parent
         while parent:
             if parent.type in ("function_declaration", "function_expression", "arrow_function", "method_definition"):
@@ -399,13 +396,13 @@ class JavaScriptParser(BaseParser):
                 if name_node:
                     caller_name = content[name_node.start_byte:name_node.end_byte]
                     for qname, func_node in func_nodes.items():
-                        if (qname.endswith(f":{caller_name}") or qname.endswith(f".{caller_name}") or qname == caller_name) and \
+                        if (qname.endswith((f":{caller_name}", f".{caller_name}")) or qname == caller_name) and \
                            func_node.line_start <= node.start_point[0] + 1 <= func_node.line_end:
                             return func_node
             parent = parent.parent
         return None
 
-    def _extract_containment_edges(self, nodes: List[CodeNode], edges: List[CodeEdge]) -> None:
+    def _extract_containment_edges(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> None:
         file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
         if not file_nodes:
             return
@@ -431,7 +428,7 @@ class JavaScriptParser(BaseParser):
                         ))
                         break
 
-    def _extract_import_edges(self, nodes: List[CodeNode], edges: List[CodeEdge]) -> None:
+    def _extract_import_edges(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> None:
         file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
         if not file_nodes:
             return
@@ -447,7 +444,7 @@ class JavaScriptParser(BaseParser):
                     line=node.line_start,
                 ))
 
-    def get_file_summary(self, file_path: Path, nodes: List[CodeNode]) -> FileSummary:
+    def get_file_summary(self, file_path: Path, nodes: list[CodeNode]) -> FileSummary:
         file_nodes = [n for n in nodes if n.file_path == str(file_path)]
         funcs = [n for n in file_nodes if n.node_type == NodeType.FUNCTION]
         methods = [n for n in file_nodes if n.node_type == NodeType.METHOD]
@@ -466,7 +463,7 @@ class JavaScriptParser(BaseParser):
         return FileSummary(
             file_path=str(file_path),
             language=language,
-            lines_of_code=([n for n in file_nodes if n.node_type == NodeType.FILE][0].line_end) if file_nodes else 0,
+            lines_of_code=(next(n for n in file_nodes if n.node_type == NodeType.FILE).line_end) if file_nodes else 0,
             node_count=len(file_nodes),
             function_count=len(all_funcs),
             class_count=len(classes),
@@ -482,7 +479,7 @@ class JavaScriptParser(BaseParser):
             return f"{file_part}:{name}"
         return f"{parent_id}.{name}"
 
-    def _extract_js_parameters(self, params_node: TSNode, content: str) -> List[str]:
+    def _extract_js_parameters(self, params_node: TSNode, content: str) -> list[str]:
         params = []
         for child in params_node.children:
             if child.type == "identifier":

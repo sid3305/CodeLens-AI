@@ -1,20 +1,21 @@
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Query
+from typing import Annotated
+
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 
 from backend.schemas.repository import (
     GitHubImportRequest,
-    RepositoryResponse,
     RepositoryFilesResponse,
+    RepositoryResponse,
 )
 from backend.services.repository_service import (
-    import_zip_repository,
+    delete_repository,
+    get_file_content,
     import_github_repository,
+    import_zip_repository,
     list_repositories,
     list_repository_files,
-    get_file_content,
-    delete_repository,
 )
-
 
 router = APIRouter(
     prefix="/api/repositories",
@@ -30,7 +31,7 @@ def get_repositories():
 
 
 @router.post("/upload", response_model=RepositoryResponse)
-async def upload_repository(file: UploadFile = File(...)):
+async def upload_repository(file: Annotated[UploadFile, File()]):
     """Import a repository from a ZIP archive."""
 
     try:
@@ -39,7 +40,7 @@ async def upload_repository(file: UploadFile = File(...)):
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
-    except Exception:
+    except OSError:
         raise HTTPException(
             status_code=500,
             detail="Unable to import the uploaded repository.",
@@ -56,7 +57,9 @@ def import_from_github(request: GitHubImportRequest):
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
 
-    except Exception:
+    # Clone failures. git's own message is not returned: it includes the
+    # local destination path.
+    except RuntimeError:
         raise HTTPException(
             status_code=502,
             detail="Unable to import the GitHub repository. Check the URL and try again.",

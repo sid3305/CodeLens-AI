@@ -3,19 +3,19 @@
 # Optional analyzers (Semgrep, Gitleaks): see requirements-analyzers.txt.
 
 # --- Backend (FastAPI) ---
-fastapi
-uvicorn[standard]
-python-multipart
-python-dotenv
-groq
+fastapi==0.165.0
+uvicorn[standard]==0.54.0
+python-multipart==0.0.34
+python-dotenv==1.2.4
+groq==1.7.0
 
 # --- Baseline static analyzers (run natively on every platform) ---
-ruff
-bandit
+ruff==0.17.6
+bandit==1.9.4
 
 # --- Code graph & dependency analysis ---
-tree-sitter
-tree-sitter-python
-tree-sitter-javascript
-tree-sitter-typescript
-networkx
+tree-sitter==0.26.1
+tree-sitter-python==0.25.0
+tree-sitter-javascript==0.25.0
+tree-sitter-typescript==0.23.2
+networkx==3.7

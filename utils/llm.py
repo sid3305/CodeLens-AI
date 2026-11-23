@@ -1,5 +1,6 @@
 
 import os
+
 from groq import Groq
 
 # Importing config loads the project's .env file.
@@ -33,5 +34,5 @@ def call_llm(prompt, max_tokens=2048):
 
     except Exception as e:
         raise RuntimeError(
-            f"Groq API Error: {str(e)}"
+            f"Groq API Error: {e!s}"
         ) from e

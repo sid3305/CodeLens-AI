@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional, Dict, Any, List, Set
-from pathlib import Path
+from typing import Any
 
 
 class NodeType(str, Enum):
@@ -40,14 +39,14 @@ class CodeNode:
     language: str                    # "python", "javascript", "typescript"
 
     # Optional metadata
-    complexity: Optional[int] = None           # Cyclomatic complexity
-    parameters: List[str] = field(default_factory=list)
-    return_type: Optional[str] = None
-    decorators: List[str] = field(default_factory=list)
+    complexity: int | None = None           # Cyclomatic complexity
+    parameters: list[str] = field(default_factory=list)
+    return_type: str | None = None
+    decorators: list[str] = field(default_factory=list)
     is_async: bool = False
     is_entry_point: bool = False               # main(), exported, test, etc.
     is_exported: bool = False
-    docstring: Optional[str] = None
+    docstring: str | None = None
 
     # Computed metrics (filled by graph analysis)
     fan_in: int = 0                            # Number of incoming CALLS edges
@@ -70,8 +69,8 @@ class CodeEdge:
     target: str                      # Target node ID
     edge_type: EdgeType
     confidence: str = "likely"       # "certain" | "likely" | "possible"
-    line: Optional[int] = None       # Source line where edge originates
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    line: int | None = None       # Source line where edge originates
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -86,7 +85,7 @@ class FileSummary:
     import_count: int
     complexity_total: int
     complexity_average: float
-    external_dependencies: List[str] = field(default_factory=list)
+    external_dependencies: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -95,9 +94,9 @@ class GraphSummary:
     total_files: int
     total_nodes: int
     total_edges: int
-    languages: Dict[str, int]
-    file_summaries: List[FileSummary]
-    entry_points: List[str]                    # Node IDs of entry points
-    circular_dependencies: List[List[str]]     # Cycles in import graph
-    dead_code_nodes: List[str]                 # Node IDs with no incoming edges (not entry points)
-    hotspots: List[str]                        # High complexity + high fan-in nodes
+    languages: dict[str, int]
+    file_summaries: list[FileSummary]
+    entry_points: list[str]                    # Node IDs of entry points
+    circular_dependencies: list[list[str]]     # Cycles in import graph
+    dead_code_nodes: list[str]                 # Node IDs with no incoming edges (not entry points)
+    hotspots: list[str]                        # High complexity + high fan-in nodes

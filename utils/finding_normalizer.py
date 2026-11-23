@@ -1,11 +1,7 @@
 
 import hashlib
-import re
 
-from utils.severity_classifier import (
-    normalize_severity,
-    normalize_confidence
-)
+from utils.severity_classifier import normalize_confidence, normalize_severity
 
 
 def extract_cwe(finding):

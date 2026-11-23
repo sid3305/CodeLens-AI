@@ -4,21 +4,20 @@ Dependencies analysis router.
 Endpoints for analyzing and visualizing code dependencies.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from pathlib import Path
 from dataclasses import asdict
+from pathlib import Path
 
+from fastapi import APIRouter, HTTPException, Query
+
+from backend.schemas.dependencies import (
+    DependenciesAnalysisResponse,
+)
 from backend.services.repository_service import get_repository
 from utils.code_graph import parse_repository
 from utils.code_graph.dependencies import (
     analyze_dependencies,
     get_dependency_stats,
 )
-from backend.schemas.dependencies import (
-    DependenciesAnalysisResponse,
-)
-from datetime import datetime, timezone
-
 
 router = APIRouter(
     prefix="/api/repositories",
@@ -51,7 +50,7 @@ def get_dependencies_analysis(
         def read_file(file_path: str) -> str:
             try:
                 return Path(file_path).read_text(encoding="utf-8", errors="ignore")
-            except Exception:
+            except OSError:
                 return ""
 
         result = parse_repository(code_files, read_file)
@@ -88,8 +87,6 @@ def get_dependencies_analysis(
 )
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Dependencies analysis failed: {str(e)}")
 
 
 @router.get("/{repo_id}/dependencies/circular")
@@ -104,7 +101,7 @@ def get_circular_dependencies(repo_id: str):
         def read_file(file_path: str) -> str:
             try:
                 return Path(file_path).read_text(encoding="utf-8", errors="ignore")
-            except Exception:
+            except OSError:
                 return ""
 
         result = parse_repository(code_files, read_file)
@@ -122,8 +119,6 @@ def get_circular_dependencies(repo_id: str):
 
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to find circular dependencies: {str(e)}")
 
 
 @router.get("/{repo_id}/dependencies/external")
@@ -138,7 +133,7 @@ def get_external_dependencies(repo_id: str):
         def read_file(file_path: str) -> str:
             try:
                 return Path(file_path).read_text(encoding="utf-8", errors="ignore")
-            except Exception:
+            except OSError:
                 return ""
 
         result = parse_repository(code_files, read_file)
@@ -156,8 +151,6 @@ def get_external_dependencies(repo_id: str):
 
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get external dependencies: {str(e)}")
 
 
 @router.get("/{repo_id}/dependencies/module-graph")
@@ -172,7 +165,7 @@ def get_module_dependency_graph(repo_id: str):
         def read_file(file_path: str) -> str:
             try:
                 return Path(file_path).read_text(encoding="utf-8", errors="ignore")
-            except Exception:
+            except OSError:
                 return ""
 
         result = parse_repository(code_files, read_file)
@@ -194,8 +187,6 @@ def get_module_dependency_graph(repo_id: str):
 
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get module graph: {str(e)}")
 
 
 @router.get("/{repo_id}/dependencies/stats")
@@ -210,7 +201,7 @@ def get_dependencies_stats(repo_id: str):
         def read_file(file_path: str) -> str:
             try:
                 return Path(file_path).read_text(encoding="utf-8", errors="ignore")
-            except Exception:
+            except OSError:
                 return ""
 
         result = parse_repository(code_files, read_file)
@@ -226,8 +217,6 @@ def get_dependencies_stats(repo_id: str):
 
     except ValueError as error:
         raise HTTPException(status_code=404, detail=str(error))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get dependency stats: {str(e)}")
 
 
 def _get_all_code_files(repo_path: Path) -> list[Path]:

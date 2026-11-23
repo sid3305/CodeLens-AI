@@ -1,8 +1,14 @@
-import networkx as nx
-from typing import List, Dict, Any, Optional, Set, Tuple
 from collections import defaultdict
+from typing import Any
 
-from utils.code_graph.models import CodeNode, CodeEdge, NodeType, EdgeType, GraphSummary, FileSummary
+import networkx as nx
+
+from utils.code_graph.models import (
+    CodeEdge,
+    CodeNode,
+    EdgeType,
+    NodeType,
+)
 
 
 class CodeGraphBuilder:
@@ -10,10 +16,10 @@ class CodeGraphBuilder:
 
     def __init__(self):
         self.graph = nx.DiGraph()
-        self.nodes_by_id: Dict[str, CodeNode] = {}
-        self.edges: List[CodeEdge] = []
+        self.nodes_by_id: dict[str, CodeNode] = {}
+        self.edges: list[CodeEdge] = []
 
-    def build(self, nodes: List[CodeNode], edges: List[CodeEdge]) -> nx.DiGraph:
+    def build(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> nx.DiGraph:
         """Build the NetworkX graph from nodes and edges."""
         self.graph.clear()
         self.nodes_by_id = {n.id: n for n in nodes}
@@ -34,7 +40,7 @@ class CodeGraphBuilder:
 
         return self.graph
 
-    def _node_attributes(self, node: CodeNode) -> Dict[str, Any]:
+    def _node_attributes(self, node: CodeNode) -> dict[str, Any]:
         return {
             "name": node.name,
             "qualified_name": node.qualified_name,
@@ -53,7 +59,7 @@ class CodeGraphBuilder:
             "docstring": node.docstring,
         }
 
-    def _edge_attributes(self, edge: CodeEdge) -> Dict[str, Any]:
+    def _edge_attributes(self, edge: CodeEdge) -> dict[str, Any]:
         return {
             "edge_type": edge.edge_type.value,
             "confidence": edge.confidence,
@@ -93,17 +99,17 @@ class CodeGraphBuilder:
         G.add_edges_from(contain_edges)
         return G
 
-    def find_circular_imports(self) -> List[List[str]]:
+    def find_circular_imports(self) -> list[list[str]]:
         """Find circular import dependencies."""
         import_graph = self.get_import_graph()
         try:
             cycles = list(nx.simple_cycles(import_graph))
             return cycles
-        except Exception:
+        except nx.NetworkXException:
             return []
 
     def find_dead_code(self, exclude_entry_points: bool = True,
-                       exclude_exported: bool = True) -> List[str]:
+                       exclude_exported: bool = True) -> list[str]:
         """Find functions/classes with no incoming call edges."""
         call_graph = self.get_call_graph()
         dead = []
@@ -119,20 +125,20 @@ class CodeGraphBuilder:
 
         return dead
 
-    def calculate_centrality(self) -> Dict[str, float]:
+    def calculate_centrality(self) -> dict[str, float]:
         """Calculate betweenness centrality for all nodes."""
         try:
             centrality = nx.betweenness_centrality(self.graph)
             return centrality
-        except Exception:
+        except nx.NetworkXException:
             return {}
 
-    def calculate_pagerank(self) -> Dict[str, float]:
+    def calculate_pagerank(self) -> dict[str, float]:
         """Calculate PageRank for all nodes."""
         try:
             pagerank = nx.pagerank(self.graph)
             return pagerank
-        except Exception:
+        except nx.NetworkXException:
             return {}
 
     def get_fan_in(self, node_id: str) -> int:
@@ -145,23 +151,26 @@ class CodeGraphBuilder:
         call_graph = self.get_call_graph()
         return call_graph.out_degree(node_id) if node_id in call_graph else 0
 
-    def find_hotspots(self, min_complexity: int = 5, min_fan_in: int = 3) -> List[Tuple[str, float]]:
+    def find_hotspots(self, min_complexity: int = 5, min_fan_in: int = 3) -> list[tuple[str, float]]:
         """Find complexity hotspots: high complexity + high fan-in."""
         call_graph = self.get_call_graph()
         hotspots = []
 
         for node_id, node in self.nodes_by_id.items():
-            if node.node_type in (NodeType.FUNCTION, NodeType.METHOD) and node.complexity:
-                if node.complexity >= min_complexity:
-                    fan_in = call_graph.in_degree(node_id)
-                    if fan_in >= min_fan_in:
-                        score = node.complexity * (1 + fan_in)
-                        hotspots.append((node_id, score))
+            if (
+                node.node_type in (NodeType.FUNCTION, NodeType.METHOD)
+                and node.complexity
+                and node.complexity >= min_complexity
+            ):
+                fan_in = call_graph.in_degree(node_id)
+                if fan_in >= min_fan_in:
+                    score = node.complexity * (1 + fan_in)
+                    hotspots.append((node_id, score))
 
         hotspots.sort(key=lambda x: x[1], reverse=True)
         return hotspots
 
-    def get_blast_radius(self, node_id: str, max_depth: int = 5) -> Dict[str, Any]:
+    def get_blast_radius(self, node_id: str, max_depth: int = 5) -> dict[str, Any]:
         """
         Get blast radius: what transitively depends on this node.
         Returns nodes reachable by reverse CALLS edges (callers of callers...).
@@ -198,7 +207,7 @@ class CodeGraphBuilder:
             "count": len(all_nodes) - 1,  # Exclude the source node
         }
 
-    def get_downstream_impact(self, node_id: str, max_depth: int = 5) -> Dict[str, Any]:
+    def get_downstream_impact(self, node_id: str, max_depth: int = 5) -> dict[str, Any]:
         """
         Get downstream impact: what this node transitively calls.
         """
@@ -230,10 +239,9 @@ class CodeGraphBuilder:
             "count": len(all_nodes) - 1,
         }
 
-    def get_module_dependencies(self) -> Dict[str, Set[str]]:
+    def get_module_dependencies(self) -> dict[str, set[str]]:
         """Get file-level import dependencies."""
         import_graph = self.get_import_graph()
-        file_nodes = {n.id: n for n in self.nodes_by_id.values() if n.node_type == NodeType.FILE}
 
         deps = defaultdict(set)
         for src, tgt in import_graph.edges():
@@ -245,7 +253,7 @@ class CodeGraphBuilder:
 
         return dict(deps)
 
-    def _find_containing_file(self, node_id: str) -> Optional[str]:
+    def _find_containing_file(self, node_id: str) -> str | None:
         """Find the file node that contains this node."""
         # Walk up containment edges
         current = node_id
@@ -262,7 +270,7 @@ class CodeGraphBuilder:
                 break
         return None
 
-    def export_for_frontend(self, max_nodes: int = 300) -> Dict[str, Any]:
+    def export_for_frontend(self, max_nodes: int = 300) -> dict[str, Any]:
         """Export graph in a format suitable for React Flow visualization."""
         # Select important nodes
         important_nodes = self._select_important_nodes(max_nodes)
@@ -319,7 +327,7 @@ class CodeGraphBuilder:
             "showingEdges": len(filtered_edges),
         }
 
-    def _select_important_nodes(self, max_nodes: int) -> List[CodeNode]:
+    def _select_important_nodes(self, max_nodes: int) -> list[CodeNode]:
         """Select the most important nodes for visualization."""
         # Score nodes by: complexity + fan_in + centrality + is_entry_point
         centrality = self.calculate_centrality()
