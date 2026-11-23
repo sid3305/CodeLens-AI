@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Self-contained and offline: this page may not load anything. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:">
+<meta name="referrer" content="no-referrer">
+<title>{{TITLE}}</title>
+<style>
+:root { color-scheme: light; --bg:#f6f7f9; --surface:#fff; --surface2:#eef0f4; --fg:#161a21; --muted:#4b5363; --border:#d6dae2; --accent:#4338ca;
+  --critical:#a3122a; --high:#b42318; --medium:#92400e; --low:#1d4ed8; --info:#475467; --warn-bg:#fdf3d6; }
+:root[data-theme="dark"] { color-scheme: dark; --bg:#0e1116; --surface:#161a21; --surface2:#1e232c; --fg:#e7e9ee; --muted:#a7afbd; --border:#2c333f; --accent:#a5acff;
+  --critical:#ff8a9b; --high:#ff9b8a; --medium:#f5c26b; --low:#8ab4ff; --info:#b4bccb; --warn-bg:#3a2f12; }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header, main { max-width:1100px; margin:0 auto; padding:16px; }
+header { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:baseline; justify-content:space-between; border-bottom:1px solid var(--border); }
+h1 { font-size:22px; margin:0; } h2 { font-size:17px; margin:0 0 8px; } h3 { font-size:14px; margin:12px 0 6px; }
+.meta, .muted { color:var(--muted); font-size:13px; }
+section { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin:14px 0; }
+.stats { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; }
+.stat { background:var(--surface2); border-radius:6px; padding:8px 10px; } .stat b { display:block; font-size:20px; }
+code, pre, .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size:12.5px; }
+pre { background:var(--surface2); border-radius:6px; padding:8px; overflow:auto; margin:6px 0 0; white-space:pre; }
+.summary { white-space:pre-wrap; }
+input, select, button { font:inherit; color:var(--fg); background:var(--surface); border:1px solid var(--border); border-radius:6px; padding:5px 8px; }
+button { cursor:pointer; } :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.controls { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:10px; }
+.finding { border-top:1px solid var(--border); padding:10px 0; } .finding:first-child { border-top:0; }
+.sev { display:inline-block; font-size:12px; font-weight:600; border-radius:4px; padding:0 6px; border:1px solid currentColor; }
+.sev-Critical{color:var(--critical)} .sev-High{color:var(--high)} .sev-Medium{color:var(--medium)} .sev-Low{color:var(--low)} .sev-Info{color:var(--info)}
+details.dir > summary { cursor:pointer; padding:2px 0; } details.dir { margin-left:14px; } #tree > details.dir { margin-left:0; }
+.file { display:flex; gap:10px; justify-content:space-between; margin-left:14px; padding:2px 0; border-bottom:1px dashed var(--border); }
+.counts { color:var(--muted); white-space:nowrap; } .cycle { background:var(--warn-bg); color:var(--medium); border-radius:4px; padding:0 5px; font-size:12px; }
+ul.plain { list-style:none; margin:0; padding:0; } ul.plain li { padding:2px 0; }
+.note { background:var(--warn-bg); border-radius:6px; padding:6px 10px; }
+</style>
+</head>
+<body>
+<header>
+  <div><h1 id="repo-name"></h1><p class="meta" id="generated"></p></div>
+  <button type="button" id="theme-toggle" aria-pressed="false">Dark theme</button>
+</header>
+<main>
+  <div id="notes"></div>
+  <section aria-labelledby="summary-h"><h2 id="summary-h">Summary</h2><div class="stats" id="stats"></div><p class="muted" id="analyzers"></p></section>
+  <section aria-labelledby="ai-h" id="ai-section" hidden><h2 id="ai-h">AI summary</h2><p class="muted" id="ai-meta"></p><div class="summary" id="ai-text"></div></section>
+  <section aria-labelledby="tree-h"><h2 id="tree-h">Repository tree</h2>
+    <p class="muted">↗ files this file imports · ↙ files that import it (repository files only)</p><div id="tree"></div></section>
+  <section aria-labelledby="issues-h"><h2 id="issues-h">Issues</h2>
+    <div class="controls">
+      <label>Search <input type="search" id="q" placeholder="Title, file or rule"></label>
+      <label>Severity <select id="sev"><option value="All">All</option></select></label>
+      <span class="muted" id="issue-count" role="status"></span>
+    </div><div id="issues"></div></section>
+  <section aria-labelledby="deps-h"><h2 id="deps-h">Dependencies</h2><div id="deps"></div></section>
+</main>
+<script type="application/json" id="report-data">{{DATA}}</script>
+<script>
+(function () {
+  'use strict';
+  var R = JSON.parse(document.getElementById('report-data').textContent);
+  var SEVS = ['Critical', 'High', 'Medium', 'Low', 'Info'];
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    Object.keys(attrs || {}).forEach(function (k) { if (k === 'text') node.textContent = attrs[k]; else node.setAttribute(k, attrs[k]); });
+    (children || []).forEach(function (c) { if (c) node.appendChild(c); });
+    return node;
+  }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
+
+  // Theme: follows the system, with a toggle (not stored: the page has no storage).
+  var root = document.documentElement, toggle = document.getElementById('theme-toggle');
+  function setTheme(dark) { root.dataset.theme = dark ? 'dark' : 'light'; toggle.setAttribute('aria-pressed', String(dark)); toggle.textContent = dark ? 'Light theme' : 'Dark theme'; }
+  setTheme(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  toggle.addEventListener('click', function () { setTheme(root.dataset.theme !== 'dark'); });
+
+  document.getElementById('repo-name').textContent = R.repository.name;
+  document.getElementById('generated').textContent = 'Generated on ' + new Date(R.generated_at).toLocaleString() + ' from ' + R.repository.name +
+    (R.repository.ref ? ' @ ' + R.repository.ref : '') + ' · ' + R.tool.name + ' ' + R.tool.version;
+  R.notes.forEach(function (n) { document.getElementById('notes').appendChild(el('p', { 'class': 'note', text: n })); });
+
+  // Summary
+  var deps = R.dependencies, counts = {};
+  R.findings.forEach(function (f) { counts[f.severity] = (counts[f.severity] || 0) + 1; });
+  var stats = [['Files', R.files.length], ['Analysed source files', deps.analyzed_files.length], ['Findings', R.findings.length],
+    ['Import cycles', deps.circular_dependencies.length], ['External packages', deps.external_dependencies.length]];
+  SEVS.forEach(function (s) { if (counts[s]) stats.push([s + ' findings', counts[s]]); });
+  stats.forEach(function (s) { document.getElementById('stats').appendChild(el('div', { 'class': 'stat' }, [el('b', { text: String(s[1]) }), el('span', { text: s[0] })])); });
+  document.getElementById('analyzers').textContent = R.analysis
+    ? 'Analyzers: ' + Object.keys(R.analysis.tool_status).map(function (k) { return k + ' ' + R.analysis.tool_status[k].status.toLowerCase(); }).join(', ')
+    : 'No static analysis was run before this export.';
+  if (R.ai_summary) {
+    document.getElementById('ai-section').hidden = false;
+    document.getElementById('ai-meta').textContent = 'Generated by AI on ' + new Date(R.ai_summary.generated_at).toLocaleString() + '. It can be wrong.';
+    document.getElementById('ai-text').textContent = R.ai_summary.text;
+  }
+
+  // Tree with connections
+  var out = {}, inn = {}, cyc = {};
+  deps.module_dependencies.forEach(function (d) {
+    if (d.import_type !== 'internal' || d.source_module === d.target_module) return;
+    (out[d.source_module] = out[d.source_module] || {})[d.target_module] = 1;
+    (inn[d.target_module] = inn[d.target_module] || {})[d.source_module] = 1;
+  });
+  deps.circular_dependencies.forEach(function (c) { (c.files && c.files.length ? c.files : c.cycle).forEach(function (p) { cyc[p] = 1; }); });
+  var analysed = {}; deps.analyzed_files.forEach(function (p) { analysed[p] = 1; });
+  var tree = {};
+  R.files.forEach(function (p) { var node = tree; var parts = p.split('/'); parts.forEach(function (part, i) {
+    if (i === parts.length - 1) { node[part] = p; } else { node[part] = node[part] || {}; node = node[part]; } }); });
+  function render(node, parent, depth) {
+    Object.keys(node).sort(function (a, b) { var fa = typeof node[a] === 'string', fb = typeof node[b] === 'string'; return fa === fb ? a.localeCompare(b) : fa ? 1 : -1; })
+      .forEach(function (name) {
+        var v = node[name];
+        if (typeof v === 'string') {
+          var info = el('span', { 'class': 'counts' });
+          if (analysed[v]) {
+            var o = Object.keys(out[v] || {}).length, i = Object.keys(inn[v] || {}).length;
+            if (cyc[v]) info.appendChild(el('span', { 'class': 'cycle', text: 'cycle' }));
+            info.appendChild(document.createTextNode(' ↗' + o + ' ↙' + i));
+            info.setAttribute('title', 'imports ' + plural(o, 'file') + ', imported by ' + plural(i, 'file'));
+          }
+          parent.appendChild(el('div', { 'class': 'file' }, [el('span', { 'class': 'mono', text: name }), info]));
+        } else {
+          var d = el('details', { 'class': 'dir' }); if (depth < 1) d.open = true;
+          d.appendChild(el('summary', { 'class': 'mono', text: name + '/' }));
+          render(v, d, depth + 1); parent.appendChild(d);
+        }
+      });
+  }
+  render(tree, document.getElementById('tree'), 0);
+
+  // Issues with search and severity filter
+  var sevSelect = document.getElementById('sev');
+  SEVS.forEach(function (s) { if (counts[s]) sevSelect.appendChild(el('option', { value: s, text: s })); });
+  function showIssues() {
+    var q = document.getElementById('q').value.trim().toLowerCase(), sev = sevSelect.value, box = document.getElementById('issues');
+    box.textContent = '';
+    var shown = R.findings.filter(function (f) {
+      return (sev === 'All' || f.severity === sev) &&
+        (!q || [f.title, f.file, f.rule_id, f.description].join(' ').toLowerCase().indexOf(q) !== -1);
+    });
+    document.getElementById('issue-count').textContent = 'Showing ' + shown.length + ' of ' + R.findings.length;
+    if (!R.findings.length) box.appendChild(el('p', { 'class': 'muted', text: R.analysis ? 'The analyzers found nothing.' : 'No analysis results.' }));
+    shown.forEach(function (f) {
+      var item = el('article', { 'class': 'finding' }, [
+        el('div', {}, [el('span', { 'class': 'sev sev-' + f.severity, text: f.severity }), document.createTextNode(' '), el('strong', { text: f.title })]),
+        el('div', { 'class': 'muted mono', text: (f.file || '') + (f.line ? ':' + f.line : '') + ' · ' + (f.rule_id || 'no rule') + ' · ' + f.detected_by.join(', ') }),
+        f.description ? el('p', { text: f.description }) : null,
+        f.recommendation ? el('p', { 'class': 'muted', text: 'Recommendation: ' + f.recommendation }) : null,
+      ]);
+      if (f.snippet) item.appendChild(el('pre', { 'aria-label': 'Code around line ' + f.line, text: f.snippet.text.split('\n').map(function (l, i) {
+        return String(f.snippet.start_line + i).padStart(5) + '  ' + l; }).join('\n') }));
+      box.appendChild(item);
+    });
+  }
+  document.getElementById('q').addEventListener('input', showIssues);
+  sevSelect.addEventListener('change', showIssues);
+  showIssues();
+
+  // Dependency lists
+  var box = document.getElementById('deps');
+  function list(title, items, line) {
+    var d = el('details', {}, [el('summary', {}, [el('h3', { text: title + ' (' + items.length + ')', style: 'display:inline' })])]);
+    if (!items.length) d.appendChild(el('p', { 'class': 'muted', text: 'None.' }));
+    else d.appendChild(el('ul', { 'class': 'plain' }, items.map(function (x) { return el('li', { 'class': 'mono', text: line(x) }); })));
+    box.appendChild(d);
+  }
+  list('Internal imports', deps.module_dependencies.filter(function (d) { return d.import_type === 'internal'; }), function (d) { return d.source_module + ' → ' + d.target_module; });
+  list('External packages', deps.external_dependencies, function (d) { return d.name + (d.version ? ' ' + d.version : '') + ' — ' + plural(d.import_count, 'import'); });
+  list('Standard library', deps.stdlib_imports, function (d) { return d.name + ' — ' + d.source_files.join(', '); });
+  list('Unresolved imports', deps.unresolved_imports, function (d) { return d.file + ':' + d.line + ' ' + d.specifier + ' — ' + d.reason; });
+  list('Import cycles', deps.circular_dependencies, function (c) { return c.cycle.concat([c.cycle[0]]).join(' → '); });
+  list('Skipped files', deps.skipped_files, function (d) { return d.path + ' — ' + d.reason; });
+})();
+</script>
+</body>
+</html>

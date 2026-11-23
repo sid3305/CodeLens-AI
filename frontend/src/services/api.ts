@@ -136,6 +136,16 @@ export const api = {
   findingAi: (repoId: string, findingId: string, mode: FindingAiMode) =>
     postJson<FindingAiResponse>(`${repo(repoId)}/findings/${encodeURIComponent(findingId)}/ai`, { mode }),
 
+  /** X3: the report file (never calls the AI). */
+  exportReport: async (repoId: string, format: 'html' | 'json' | 'sarif', includeSummary: boolean) => {
+    const query = new URLSearchParams({ format, include_summary: String(includeSummary) })
+    const response = await fetch(`${API_BASE_URL}${repo(repoId)}/export?${query}`)
+    if (!response.ok) throw new ApiError(`Export failed (${response.status})`, response.status)
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `codelens-report.${format}`
+    return { blob: await response.blob(), filename }
+  },
+
   getAiConsent: (repoId: string, signal?: AbortSignal) =>
     request<AiConsent>(`${repo(repoId)}/ai-consent`, { signal }),
 

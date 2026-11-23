@@ -1,3 +1,7 @@
+import { lazy, Suspense, useState } from 'react'
+import { FileDown } from 'lucide-react'
+
+import { Button } from '../components/ui'
 import { useAiAllowed, useAnalysis, useGenerateSummary, useRepositoryFiles, useSavedSummary } from '../data/hooks'
 import AiConsentNotice from '../components/ai/AiConsent'
 import { describeAnalysis } from '../lib/analysis'
@@ -6,6 +10,9 @@ import type { Repository } from '../types'
 import OverviewSection from '../components/workspace/OverviewSection'
 import { PageContainer, PageHeader, RunAnalysisButton } from './PageHeader'
 
+// The export code is only loaded when the panel is opened (X3).
+const ExportPanel = lazy(() => import('../components/export/ExportPanel'))
+
 /** Render with key={repository.id} so mutation state never crosses repositories. */
 export default function OverviewPage({ repository }: { repository: Repository }) {
   const files = useRepositoryFiles(repository.id)
@@ -13,6 +20,7 @@ export default function OverviewPage({ repository }: { repository: Repository })
   const saved = useSavedSummary(repository.id)
   const generate = useGenerateSummary(repository.id)
   const aiAllowed = useAiAllowed(repository.id)
+  const [exportOpen, setExportOpen] = useState(false)
 
   const result = analysis.data ?? null
   const summaryError = generate.error
@@ -26,8 +34,24 @@ export default function OverviewPage({ repository }: { repository: Repository })
       <PageHeader
         title="Overview"
         description="Repository statistics, AI summary and findings at a glance."
-        actions={<RunAnalysisButton repoId={repository.id} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              icon={<FileDown size={15} aria-hidden="true" />}
+              aria-expanded={exportOpen}
+              onClick={() => setExportOpen(!exportOpen)}
+            >
+              Export report
+            </Button>
+            <RunAnalysisButton repoId={repository.id} />
+          </div>
+        }
       />
+      {exportOpen && (
+        <Suspense fallback={null}>
+          <ExportPanel repoId={repository.id} hasSummary={Boolean(saved.data)} />
+        </Suspense>
+      )}
       <OverviewSection
         files={files.data ?? []}
         analysis={result}
