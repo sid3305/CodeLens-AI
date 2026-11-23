@@ -16,6 +16,8 @@ export const queryKeys = {
   dependencies: (repoId: string) => ['repository', repoId, 'dependencies'] as const,
   fileContent: (repoId: string, path: string) => ['repository', repoId, 'file', path] as const,
   explanation: (repoId: string, path: string) => ['repository', repoId, 'explanation', path] as const,
+  findingAi: (repoId: string, findingId: string, mode: string) =>
+    ['repository', repoId, 'finding-ai', findingId, mode] as const,
 }
 
 const MAX_RETRIES = 2

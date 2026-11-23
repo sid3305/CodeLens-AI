@@ -4,6 +4,7 @@ import type { Repository } from '../types'
 import IssuesSection from '../components/workspace/IssuesSection'
 import type { FindingFilters } from '../components/workspace/findingFilters'
 import { LoadingBlock } from '../components/ui'
+import AiConsentNotice from '../components/ai/AiConsent'
 import { PageContainer, PageHeader, RunAnalysisButton } from './PageHeader'
 
 export default function IssuesPage({
@@ -27,6 +28,14 @@ export default function IssuesPage({
         description="Findings from the static analyzers, merged across tools."
         actions={<RunAnalysisButton repoId={repository.id} />}
       />
+      {result && result.findings.length > 0 && (
+        <div className="mb-4">
+          <AiConsentNotice
+            repoId={repository.id}
+            sends="a finding and up to 21 lines around it, when you click Explain finding or Suggest fix,"
+          />
+        </div>
+      )}
       {analysis.isPending ? (
         <LoadingBlock label="Loading analysis results" lines={5} />
       ) : (

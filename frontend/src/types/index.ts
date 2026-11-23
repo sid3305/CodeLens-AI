@@ -35,6 +35,18 @@ export interface RepositoryLinkPreview {
   url: string
 }
 
+export type FindingAiMode = 'explain' | 'fix'
+
+/** B5: an AI explanation of, or fix for, one finding, and exactly what was sent. */
+export interface FindingAiResponse {
+  repository_id: string
+  finding_id: string
+  mode: FindingAiMode
+  text: string
+  generated_at: string
+  sent: { file: string; start_line: number | null; end_line: number | null }
+}
+
 export type JobKind = 'import' | 'analysis' | 'dependencies'
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
 

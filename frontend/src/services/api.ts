@@ -1,5 +1,7 @@
 import type {
   AiConsent,
+  FindingAiMode,
+  FindingAiResponse,
   Job,
   AnalysisResponse,
   DependenciesAnalysisResponse,
@@ -129,6 +131,10 @@ export const api = {
   /** The saved dependency report, or null if never computed (start a job). */
   getCachedDependencies: (repoId: string, signal?: AbortSignal) =>
     request<DependenciesAnalysisResponse | null>(`${repo(repoId)}/dependencies/cached`, { signal }),
+
+  /** B5: sends one finding and a small redacted code window to the AI. */
+  findingAi: (repoId: string, findingId: string, mode: FindingAiMode) =>
+    postJson<FindingAiResponse>(`${repo(repoId)}/findings/${encodeURIComponent(findingId)}/ai`, { mode }),
 
   getAiConsent: (repoId: string, signal?: AbortSignal) =>
     request<AiConsent>(`${repo(repoId)}/ai-consent`, { signal }),

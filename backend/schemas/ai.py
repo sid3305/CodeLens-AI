@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 
@@ -26,6 +28,27 @@ class AiConsentResponse(BaseModel):
     model: str
     configured: bool
     problem: str | None = None
+
+
+class FindingAiRequest(BaseModel):
+    """B5: explain a finding, or suggest a fix for it."""
+    mode: Literal["explain", "fix"]
+
+
+class FindingAiSent(BaseModel):
+    """Exactly which code was sent (null lines: no code was sent)."""
+    file: str
+    start_line: int | None
+    end_line: int | None
+
+
+class FindingAiResponse(BaseModel):
+    repository_id: str
+    finding_id: str
+    mode: Literal["explain", "fix"]
+    text: str
+    generated_at: str
+    sent: FindingAiSent
 
 
 class ExplainRequest(BaseModel):

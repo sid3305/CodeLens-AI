@@ -1,7 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../services/api'
-import type { AiConsent, ExplainResponse, Repository, SummaryResponse } from '../types'
+import type {
+  AiConsent,
+  ExplainResponse,
+  FindingAiMode,
+  FindingAiResponse,
+  Repository,
+  SummaryResponse,
+} from '../types'
 import { queryKeys } from './queryClient'
 
 const HEALTH_INTERVAL_MS = 30_000
@@ -132,6 +139,29 @@ export function useExplainFile(repoId: string) {
     mutationFn: (path: string) => api.explainFile(repoId, path),
     retry: false,
     onSuccess: (explanation, path) => client.setQueryData(queryKeys.explanation(repoId, path), explanation),
+  })
+}
+
+/** B5: an answer stored for exactly this finding and mode (no fetch). */
+export function useStoredFindingAi(repoId: string, findingId: string, mode: FindingAiMode) {
+  return useQuery<FindingAiResponse | null>({
+    queryKey: queryKeys.findingAi(repoId, findingId, mode),
+    queryFn: () => null,
+    enabled: false,
+    staleTime: Infinity,
+  })
+}
+
+/**
+ * B5: sends one finding and a small code window to the LLM. Never retried;
+ * the answer is stored under the finding it was asked for.
+ */
+export function useFindingAi(repoId: string, findingId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (mode: FindingAiMode) => api.findingAi(repoId, findingId, mode),
+    retry: false,
+    onSuccess: (answer, mode) => client.setQueryData(queryKeys.findingAi(repoId, findingId, mode), answer),
   })
 }
 

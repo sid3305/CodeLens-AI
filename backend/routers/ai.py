@@ -4,14 +4,18 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Query
 
 from agents.explain_agent import run_explain_agent
+from agents.finding_agent import code_window, run_finding_agent
 from agents.repo_agent import run_repo_agent
 from backend.schemas.ai import (
     AiConsentRequest,
     AiConsentResponse,
     ExplainRequest,
     ExplainResponse,
+    FindingAiRequest,
+    FindingAiResponse,
     SummaryResponse,
 )
+from backend.services.analysis_service import get_analysis_results
 from backend.services.repository_service import (
     get_repository,
     get_saved_repository_summary,
@@ -53,6 +57,59 @@ def ai_error(error: Exception) -> HTTPException:
     if isinstance(error, AIServiceError):
         return HTTPException(status_code=502, detail=str(error))
     return HTTPException(status_code=502, detail="The AI request failed. Try again later.")
+
+
+@router.post("/{repo_id}/findings/{finding_id}/ai", response_model=FindingAiResponse)
+def finding_ai(repo_id: str, finding_id: str, request: FindingAiRequest):
+    """
+    B5: explain a finding or suggest a fix. Sends the finding, its
+    repository-relative path and at most 21 redacted lines around it.
+    """
+
+    try:
+        repository = get_repository(repo_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+
+    require_ai_consent(repository)
+
+    results = get_analysis_results(repo_id)
+    finding = next((item for item in (results or {}).get("findings", []) if item.get("id") == finding_id), None)
+    if finding is None:
+        raise HTTPException(status_code=404, detail="Finding not found. Run an analysis first.")
+
+    relative = finding.get("file") or ""
+    window = None
+    # Sensitive files: the finding is explained without their code.
+    if relative and not is_sensitive_file(relative):
+        try:
+            path = resolve_within(repository["path"], relative)
+            if path.is_file() and path.stat().st_size <= 1024 * 1024:
+                content = read_file_content(str(path))
+                if not content.startswith("Error reading file:"):
+                    window = code_window(content, finding.get("line"))
+        except ValueError:
+            window = None
+
+    try:
+        text = run_finding_agent(finding, request.mode, window)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    except RuntimeError as error:
+        raise ai_error(error)
+
+    return FindingAiResponse(
+        repository_id=repo_id,
+        finding_id=finding_id,
+        mode=request.mode,
+        text=text,
+        generated_at=datetime.now(timezone.utc).isoformat(),
+        sent={
+            "file": relative,
+            "start_line": window[1] if window else None,
+            "end_line": window[2] if window else None,
+        },
+    )
 
 
 @router.get("/{repo_id}/ai-consent", response_model=AiConsentResponse)

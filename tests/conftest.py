@@ -50,8 +50,9 @@ class FakeLLM:
         self.response = "Fake LLM response."
         self.error = None
 
-    def __call__(self, prompt, max_tokens=2048):
-        self.calls.append(prompt)
+    def __call__(self, prompt, max_tokens=2048, *, system=None):
+        # The system message is recorded with the prompt: both are sent.
+        self.calls.append(f"{system}\n\n{prompt}" if system else prompt)
         if self.error:
             raise self.error
         return self.response
@@ -62,10 +63,12 @@ def fake_llm(monkeypatch):
     fake = FakeLLM()
 
     import agents.explain_agent
+    import agents.finding_agent
     import agents.repo_agent
 
     monkeypatch.setattr(agents.repo_agent, "call_llm", fake)
     monkeypatch.setattr(agents.explain_agent, "call_llm", fake)
+    monkeypatch.setattr(agents.finding_agent, "call_llm", fake)
     return fake
 
 

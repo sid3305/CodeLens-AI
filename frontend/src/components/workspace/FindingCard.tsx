@@ -5,6 +5,7 @@ import { useFileContent } from '../../data/hooks'
 import { errorMessage } from '../../services/api'
 import type { Finding } from '../../types'
 import CodeLines from '../code/CodeLines'
+import FindingAi from './FindingAi'
 import { Badge, Button, InlineMessage, LoadingBlock, SeverityBadge, cn } from '../ui'
 
 const CONTEXT_LINES = 12
@@ -119,6 +120,8 @@ export default function FindingCard({
           ) : null
         )}
       </div>
+
+      <FindingAi finding={finding} repositoryId={repositoryId} />
     </article>
   )
 }
