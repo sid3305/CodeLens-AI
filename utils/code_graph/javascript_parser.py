@@ -1,11 +1,10 @@
-import re
 from pathlib import Path
 
 from tree_sitter import Language, Parser
 from tree_sitter import Node as TSNode
 
 from utils.code_graph.base import BaseParser, ParserRegistry
-from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, FileSummary, NodeType
+from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, NodeType
 
 # Load JavaScript/TypeScript grammars
 try:
@@ -105,39 +104,29 @@ class JavaScriptParser(BaseParser):
                        nodes: list[CodeNode], parent_id: str, language: str) -> None:
         """Recursively extract nodes from AST."""
 
-        # Functions
-        if node.type in ("function_declaration", "function_expression", "arrow_function"):
-            func_node = self._make_function_node(node, content, file_path, parent_id, language)
-            if func_node:
-                nodes.append(func_node)
-                # Recurse into function body
-                body = node.child_by_field_name("body")
-                if body:
-                    self._extract_nodes(body, content, file_path, nodes, func_node.id, language)
+        # Functions, methods and classes handle their own bodies and return:
+        # falling through to the generic recursion would visit those bodies
+        # again with the outer parent and duplicate every nested definition.
+        if node.type in ("function_declaration", "function_expression", "arrow_function",
+                         "generator_function_declaration", "method_definition",
+                         "class_declaration", "class"):
+            if node.type == "method_definition":
+                definition = self._make_method_node(node, content, file_path, parent_id, language)
+            elif node.type in ("class_declaration", "class"):
+                definition = self._make_class_node(node, content, file_path, parent_id, language)
+            else:
+                definition = self._make_function_node(node, content, file_path, parent_id, language)
 
-        # Methods in classes/objects
-        elif node.type == "method_definition":
-            method_node = self._make_method_node(node, content, file_path, parent_id, language)
-            if method_node:
-                nodes.append(method_node)
-
-        # Classes
-        elif node.type == "class_declaration":
-            class_node = self._make_class_node(node, content, file_path, parent_id, language)
-            if class_node:
-                nodes.append(class_node)
-                # Recurse into class body
-                body = node.child_by_field_name("body")
-                if body:
-                    self._extract_nodes(body, content, file_path, nodes, class_node.id, language)
-
-        # Imports
-        elif node.type == "import_statement":
-            import_nodes = self._make_import_nodes(node, content, file_path, parent_id, language)
-            nodes.extend(import_nodes)
+            if definition:
+                nodes.append(definition)
+            body = node.child_by_field_name("body")
+            if body:
+                owner = definition.id if definition else parent_id
+                self._extract_nodes(body, content, file_path, nodes, owner, language)
+            return
 
         # Variable declarations (const/let/var at module level)
-        elif node.type in ("variable_declaration", "lexical_declaration"):
+        if node.type in ("variable_declaration", "lexical_declaration"):
             if self._is_module_level(node):
                 var_nodes = self._make_variable_nodes(node, content, file_path, parent_id, language)
                 nodes.extend(var_nodes)
@@ -153,14 +142,21 @@ class JavaScriptParser(BaseParser):
     def _make_function_node(self, node: TSNode, content: str, file_path: str,
                             parent_id: str, language: str) -> CodeNode | None:
         name_node = node.child_by_field_name("name")
-        name = content[name_node.start_byte:name_node.end_byte] if name_node else "anonymous"
+        if name_node is None and node.parent is not None and node.parent.type == "variable_declarator":
+            # const name = () => {} / const name = function () {}
+            name_node = node.parent.child_by_field_name("name")
+        if name_node is None:
+            # Anonymous callbacks get no node of their own; their calls are
+            # attributed to the enclosing named function.
+            return None
+        name = content[name_node.start_byte:name_node.end_byte]
 
         qualified_name = self._build_qualified_name(parent_id, name)
 
-        params_node = node.child_by_field_name("parameters")
+        params_node = node.child_by_field_name("parameters") or node.child_by_field_name("parameter")
         parameters = self._extract_js_parameters(params_node, content) if params_node else []
 
-        is_async = "async" in content[node.start_byte:node.start_byte + 20]
+        is_async = any(child.type == "async" for child in node.children)
 
         return CodeNode(
             id=f"func:{qualified_name}",
@@ -189,7 +185,7 @@ class JavaScriptParser(BaseParser):
         params_node = node.child_by_field_name("parameters")
         parameters = self._extract_js_parameters(params_node, content) if params_node else []
 
-        is_async = "async" in content[node.start_byte:node.start_byte + 20]
+        is_async = any(child.type == "async" for child in node.children)
 
         return CodeNode(
             id=f"method:{qualified_name}",
@@ -227,64 +223,6 @@ class JavaScriptParser(BaseParser):
             is_entry_point=False,
             is_exported=self._is_exported(node),
         )
-
-    def _make_import_nodes(self, node: TSNode, content: str, file_path: str,
-                           parent_id: str, language: str) -> list[CodeNode]:
-        nodes = []
-        import_text = content[node.start_byte:node.end_byte]
-
-        # import x from 'y'
-        # import { x, y } from 'z'
-        # import * as ns from 'w'
-        matches = re.findall(r"from\s+['\"]([^'\"]+)['\"]", import_text)
-        for module in matches:
-            # Extract imported names
-            if "import " in import_text:
-                import_part = import_text.split("import ")[1].split(" from ")[0].strip()
-                if import_part.startswith("*"):
-                    alias = import_part.split(" as ")[1].strip() if " as " in import_part else module.split("/")[-1]
-                    nodes.append(CodeNode(
-                        id=f"import:{file_path}:{alias}",
-                        name=alias,
-                        qualified_name=f"{file_path}:{alias}",
-                        node_type=NodeType.IMPORT,
-                        file_path=file_path,
-                        line_start=node.start_point[0] + 1,
-                        line_end=node.end_point[0] + 1,
-                        language=language,
-                    ))
-                elif import_part.startswith("{"):
-                    # Named imports
-                    names = re.findall(r'([A-Za-z_$][A-Za-z0-9_$]*)', import_part)
-                    for name in names:
-                        alias = name
-                        if f"{name} as " in import_part:
-                            alias = import_part.split(f"{name} as ")[1].split(",")[0].strip()
-                        nodes.append(CodeNode(
-                            id=f"import:{file_path}:{alias}",
-                            name=alias,
-                            qualified_name=f"{file_path}:{alias}",
-                            node_type=NodeType.IMPORT,
-                            file_path=file_path,
-                            line_start=node.start_point[0] + 1,
-                            line_end=node.end_point[0] + 1,
-                            language=language,
-                        ))
-                else:
-                    # Default import
-                    alias = import_part.split(" as ")[1].strip() if " as " in import_part else import_part
-                    nodes.append(CodeNode(
-                        id=f"import:{file_path}:{alias}",
-                        name=alias,
-                        qualified_name=f"{file_path}:{alias}",
-                        node_type=NodeType.IMPORT,
-                        file_path=file_path,
-                        line_start=node.start_point[0] + 1,
-                        line_end=node.end_point[0] + 1,
-                        language=language,
-                    ))
-
-        return nodes
 
     def _make_variable_nodes(self, node: TSNode, content: str, file_path: str,
                              parent_id: str, language: str) -> list[CodeNode]:
@@ -343,7 +281,6 @@ class JavaScriptParser(BaseParser):
 
         self._extract_call_edges(root, content, file_path, func_nodes, class_nodes, edges)
         self._extract_containment_edges(nodes, edges)
-        self._extract_import_edges(nodes, edges)
 
         return edges
 
@@ -437,66 +374,25 @@ class JavaScriptParser(BaseParser):
                         ))
                         break
 
-    def _extract_import_edges(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> None:
-        file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
-        if not file_nodes:
-            return
-        file_node = file_nodes[0]
-
-        for node in nodes:
-            if node.node_type == NodeType.IMPORT:
-                edges.append(CodeEdge(
-                    source=file_node.id,
-                    target=node.id,
-                    edge_type=EdgeType.IMPORTS,
-                    confidence="certain",
-                    line=node.line_start,
-                ))
-
-    def get_file_summary(self, file_path: Path, nodes: list[CodeNode]) -> FileSummary:
-        file_nodes = [n for n in nodes if n.file_path == str(file_path)]
-        funcs = [n for n in file_nodes if n.node_type == NodeType.FUNCTION]
-        methods = [n for n in file_nodes if n.node_type == NodeType.METHOD]
-        classes = [n for n in file_nodes if n.node_type == NodeType.CLASS]
-        imports = [n for n in file_nodes if n.node_type == NodeType.IMPORT]
-
-        all_funcs = funcs + methods
-
-        external_deps = []
-        for imp in imports:
-            if not imp.name.startswith(".") and not imp.name.startswith("@"):
-                external_deps.append(imp.name.split("/")[0] if "/" in imp.name else imp.name)
-
-        language = file_nodes[0].language if file_nodes else "javascript"
-
-        return FileSummary(
-            file_path=str(file_path),
-            language=language,
-            lines_of_code=(next(n for n in file_nodes if n.node_type == NodeType.FILE).line_end) if file_nodes else 0,
-            node_count=len(file_nodes),
-            function_count=len(all_funcs),
-            class_count=len(classes),
-            import_count=len(imports),
-            complexity_total=0,  # Not computed by default for JS
-            complexity_average=0,
-            external_dependencies=list(set(external_deps)),
-        )
-
     def _build_qualified_name(self, parent_id: str, name: str) -> str:
-        if parent_id.startswith("file:"):
-            file_part = parent_id[5:]
-            return f"{file_part}:{name}"
-        return f"{parent_id}.{name}"
+        """'pkg/mod.py:Class.method' from the parent's id ('file:', 'class:', ...)."""
+        kind, _, parent = parent_id.partition(":")
+        if kind == "file":
+            return f"{parent}:{name}"
+        return f"{parent}.{name}"
 
     def _extract_js_parameters(self, params_node: TSNode, content: str) -> list[str]:
+        if params_node.type == "identifier":  # x => x * 2
+            return [content[params_node.start_byte:params_node.end_byte]]
+
         params = []
-        for child in params_node.children:
-            if child.type == "identifier":
+        for child in params_node.named_children:
+            if child.type in ("required_parameter", "optional_parameter"):
+                child = child.child_by_field_name("pattern") or child
+            if child.type == "assignment_pattern":  # b = 2
+                child = child.child_by_field_name("left") or child
+            if child.type in ("identifier", "rest_pattern", "object_pattern", "array_pattern"):
                 params.append(content[child.start_byte:child.end_byte])
-            elif child.type in ("formal_parameter", "required_parameter", "optional_parameter"):
-                pattern = child.child_by_field_name("pattern")
-                if pattern:
-                    params.append(content[pattern.start_byte:pattern.end_byte])
         return params
 
     def _is_module_level(self, node: TSNode) -> bool:

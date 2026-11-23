@@ -1,11 +1,10 @@
-import re
 from pathlib import Path
 
 from tree_sitter import Language, Parser
 from tree_sitter import Node as TSNode
 
 from utils.code_graph.base import BaseParser, ParserRegistry
-from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, FileSummary, NodeType
+from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, NodeType
 
 # Load Python grammar
 try:
@@ -73,37 +72,25 @@ class PythonParser(BaseParser):
                        nodes: list[CodeNode], parent_id: str) -> None:
         """Recursively extract nodes from AST."""
 
-        if node.type == "function_definition":
-            func_node = self._make_function_node(node, content, file_path, parent_id)
-            if func_node:
-                nodes.append(func_node)
-                # Recurse into function body for nested functions
-                for child in node.children:
-                    if child.type == "block":
-                        self._extract_nodes(child, content, file_path, nodes, func_node.id)
+        if node.type in ("function_definition", "class_definition"):
+            if node.type == "function_definition":
+                is_async = any(child.type == "async" for child in node.children)
+                definition = self._make_function_node(
+                    node, content, file_path, parent_id, is_async=is_async
+                )
+            else:
+                definition = self._make_class_node(node, content, file_path, parent_id)
 
-        elif node.type == "async_function_definition":
-            func_node = self._make_function_node(node, content, file_path, parent_id, is_async=True)
-            if func_node:
-                nodes.append(func_node)
-                for child in node.children:
-                    if child.type == "block":
-                        self._extract_nodes(child, content, file_path, nodes, func_node.id)
+            if definition:
+                nodes.append(definition)
+                body = node.child_by_field_name("body")
+                if body:
+                    self._extract_nodes(body, content, file_path, nodes, definition.id)
+            # The body was handled above; recursing again would duplicate
+            # every nested definition at the outer level.
+            return
 
-        elif node.type == "class_definition":
-            class_node = self._make_class_node(node, content, file_path, parent_id)
-            if class_node:
-                nodes.append(class_node)
-                # Recurse into class body for methods
-                for child in node.children:
-                    if child.type == "block":
-                        self._extract_nodes(child, content, file_path, nodes, class_node.id)
-
-        elif node.type == "import_statement" or node.type == "import_from_statement":
-            import_nodes = self._make_import_nodes(node, content, file_path, parent_id)
-            nodes.extend(import_nodes)
-
-        elif node.type == "assignment" and self._is_module_level(node):
+        if node.type == "assignment" and self._is_module_level(node):
             # Module-level variable assignments
             var_nodes = self._make_variable_nodes(node, content, file_path, parent_id)
             nodes.extend(var_nodes)
@@ -133,11 +120,13 @@ class PythonParser(BaseParser):
 
         complexity = self._calculate_complexity(node, content)
 
+        is_method = parent_id.startswith("class:")
+
         return CodeNode(
-            id=f"func:{qualified_name}",
+            id=f"{'method' if is_method else 'func'}:{qualified_name}",
             name=name,
             qualified_name=qualified_name,
-            node_type=NodeType.FUNCTION,
+            node_type=NodeType.METHOD if is_method else NodeType.FUNCTION,
             file_path=file_path,
             line_start=node.start_point[0] + 1,
             line_end=node.end_point[0] + 1,
@@ -177,68 +166,6 @@ class PythonParser(BaseParser):
             is_entry_point=False,
             is_exported=not name.startswith("_"),
         )
-
-    def _make_import_nodes(self, node: TSNode, content: str, file_path: str,
-                           parent_id: str) -> list[CodeNode]:
-        nodes = []
-        import_text = content[node.start_byte:node.end_byte]
-
-        # Simple regex extraction for imports
-        # import x, y
-        # from x import y, z as a
-        if node.type == "import_statement":
-            matches = re.findall(r'import\s+([^#\n]+)', import_text)
-            for match in matches:
-                for part in match.split(','):
-                    part = part.strip()
-                    if ' as ' in part:
-                        module, alias = part.split(' as ')
-                        module = module.strip()
-                        alias = alias.strip()
-                    else:
-                        module = part
-                        alias = module.split('.')[0]
-
-                    nodes.append(CodeNode(
-                        id=f"import:{file_path}:{alias}",
-                        name=alias,
-                        qualified_name=f"{file_path}:{alias}",
-                        node_type=NodeType.IMPORT,
-                        file_path=file_path,
-                        line_start=node.start_point[0] + 1,
-                        line_end=node.end_point[0] + 1,
-                        language="python",
-                    ))
-
-        elif node.type == "import_from_statement":
-            # from module import name1, name2
-            module_match = re.search(r'from\s+([\w.]+)\s+import', import_text)
-            module = module_match.group(1) if module_match else ""
-
-            names_match = re.search(r'import\s+([^#\n]+)', import_text)
-            if names_match:
-                for part in names_match.group(1).split(','):
-                    part = part.strip()
-                    if ' as ' in part:
-                        name, alias = part.split(' as ')
-                        name = name.strip()
-                        alias = alias.strip()
-                    else:
-                        name = part
-                        alias = name
-
-                    nodes.append(CodeNode(
-                        id=f"import:{file_path}:{alias}",
-                        name=alias,
-                        qualified_name=f"{file_path}:{alias}",
-                        node_type=NodeType.IMPORT,
-                        file_path=file_path,
-                        line_start=node.start_point[0] + 1,
-                        line_end=node.end_point[0] + 1,
-                        language="python",
-                    ))
-
-        return nodes
 
     def _make_variable_nodes(self, node: TSNode, content: str, file_path: str,
                              parent_id: str) -> list[CodeNode]:
@@ -282,8 +209,6 @@ class PythonParser(BaseParser):
 
         self._extract_call_edges(root, content, file_path, func_nodes, class_nodes, edges)
         self._extract_containment_edges(nodes, edges)
-        self._extract_import_edges(nodes, edges)
-        self._extract_inheritance_edges(nodes, class_nodes, edges)
 
         return edges
 
@@ -385,88 +310,48 @@ class PythonParser(BaseParser):
                         ))
                         break
 
-    def _extract_import_edges(self, nodes: list[CodeNode], edges: list[CodeEdge]) -> None:
-        """IMPORTS edges: file -> import nodes."""
-        file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
-        if not file_nodes:
-            return
-        file_node = file_nodes[0]
-
-        for node in nodes:
-            if node.node_type == NodeType.IMPORT:
-                edges.append(CodeEdge(
-                    source=file_node.id,
-                    target=node.id,
-                    edge_type=EdgeType.IMPORTS,
-                    confidence="certain",
-                    line=node.line_start,
-                ))
-
-    def _extract_inheritance_edges(self, nodes: list[CodeNode],
-                                   class_nodes: dict[str, CodeNode],
-                                   edges: list[CodeEdge]) -> None:
-        """INHERITS edges between classes."""
         # This would need more sophisticated parsing of base classes
         # For now, skip - can be enhanced later
-
-    def get_file_summary(self, file_path: Path, nodes: list[CodeNode]) -> FileSummary:
-        file_nodes = [n for n in nodes if n.file_path == str(file_path)]
-        funcs = [n for n in file_nodes if n.node_type == NodeType.FUNCTION]
-        classes = [n for n in file_nodes if n.node_type == NodeType.CLASS]
-        imports = [n for n in file_nodes if n.node_type == NodeType.IMPORT]
-
-        complexities = [n.complexity for n in funcs if n.complexity is not None]
-
-        # Extract external dependencies from imports
-        external_deps = []
-        for imp in imports:
-            # Heuristic: if import doesn't look like a relative import
-            if not imp.name.startswith("."):
-                external_deps.append(imp.name.split(".")[0])
-
-        return FileSummary(
-            file_path=str(file_path),
-            language="python",
-            lines_of_code=(next(n for n in file_nodes if n.node_type == NodeType.FILE).line_end) if file_nodes else 0,
-            node_count=len(file_nodes),
-            function_count=len(funcs),
-            class_count=len(classes),
-            import_count=len(imports),
-            complexity_total=sum(complexities),
-            complexity_average=sum(complexities) / len(complexities) if complexities else 0,
-            external_dependencies=list(set(external_deps)),
-        )
 
     # Helper methods
 
     def _build_qualified_name(self, parent_id: str, name: str) -> str:
-        if parent_id.startswith("file:"):
-            file_part = parent_id[5:]  # Remove "file:"
-            return f"{file_part}:{name}"
-        return f"{parent_id}.{name}"
+        """'pkg/mod.py:Class.method' from the parent's id ('file:', 'class:', ...)."""
+        kind, _, parent = parent_id.partition(":")
+        if kind == "file":
+            return f"{parent}:{name}"
+        return f"{parent}.{name}"
 
     def _extract_parameters(self, params_node: TSNode, content: str) -> list[str]:
         params = []
-        for child in params_node.children:
+        for child in params_node.named_children:
             if child.type == "identifier":
                 params.append(content[child.start_byte:child.end_byte])
-            elif child.type == "typed_parameter":
+            elif child.type in ("default_parameter", "typed_default_parameter"):
                 name_node = child.child_by_field_name("name")
                 if name_node:
                     params.append(content[name_node.start_byte:name_node.end_byte])
+            elif child.type in (
+                "typed_parameter", "list_splat_pattern", "dictionary_splat_pattern"
+            ):
+                text = content[child.start_byte:child.end_byte]
+                params.append(text.split(":", 1)[0].strip())
         return params
 
     def _extract_decorators(self, node: TSNode, content: str) -> list[str]:
-        decorators = []
-        for child in node.children:
-            if child.type == "decorator":
-                decorators.append(content[child.start_byte:child.end_byte].strip())
-        return decorators
+        # Decorators belong to the enclosing decorated_definition node.
+        parent = node.parent
+        holder = parent if parent is not None and parent.type == "decorated_definition" else node
+        return [
+            content[child.start_byte:child.end_byte].strip().removeprefix("@")
+            for child in holder.children
+            if child.type == "decorator"
+        ]
 
     def _calculate_complexity(self, node: TSNode, content: str) -> int | None:
         """Simple cyclomatic complexity: 1 + number of decision points."""
         complexity = 1
-        decision_types = {"if_statement", "while_statement", "for_statement",
+        decision_types = {"if_statement", "elif_clause", "while_statement", "for_statement",
                           "except_clause", "with_statement", "assert_statement",
                           "conditional_expression", "boolean_operator"}
 
@@ -484,13 +369,13 @@ class PythonParser(BaseParser):
         name_node = node.child_by_field_name("name")
         if name_node:
             name = content[name_node.start_byte:name_node.end_byte]
-            return name == "__main__" or name.startswith("test_")
+            return name in ("main", "__main__") or name.startswith("test_")
         return False
 
     def _is_module_level(self, node: TSNode) -> bool:
         parent = node.parent
         while parent:
-            if parent.type in ("function_definition", "async_function_definition", "class_definition"):
+            if parent.type in ("function_definition", "class_definition"):
                 return False
             parent = parent.parent
         return True

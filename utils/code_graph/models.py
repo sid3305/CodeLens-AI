@@ -71,32 +71,3 @@ class CodeEdge:
     confidence: str = "likely"       # "certain" | "likely" | "possible"
     line: int | None = None       # Source line where edge originates
     metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class FileSummary:
-    """Summary of a file's graph information."""
-    file_path: str
-    language: str
-    lines_of_code: int
-    node_count: int
-    function_count: int
-    class_count: int
-    import_count: int
-    complexity_total: int
-    complexity_average: float
-    external_dependencies: list[str] = field(default_factory=list)
-
-
-@dataclass
-class GraphSummary:
-    """Summary of the entire repository graph."""
-    total_files: int
-    total_nodes: int
-    total_edges: int
-    languages: dict[str, int]
-    file_summaries: list[FileSummary]
-    entry_points: list[str]                    # Node IDs of entry points
-    circular_dependencies: list[list[str]]     # Cycles in import graph
-    dead_code_nodes: list[str]                 # Node IDs with no incoming edges (not entry points)
-    hotspots: list[str]                        # High complexity + high fan-in nodes

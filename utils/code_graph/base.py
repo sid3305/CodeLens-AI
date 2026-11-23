@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import ClassVar
 
-from utils.code_graph.models import CodeEdge, CodeNode, FileSummary
+from utils.code_graph.models import CodeEdge, CodeNode
 
 
 class BaseParser(ABC):
@@ -33,10 +33,6 @@ class BaseParser(ABC):
 
         Returns edges for: CALLS, CONTAINS, IMPORTS, INHERITS, DEFINES, REFERENCES.
         """
-
-    @abstractmethod
-    def get_file_summary(self, file_path: Path, nodes: list[CodeNode]) -> FileSummary:
-        """Generate a summary of the file's graph information."""
 
     # Common utility methods that can be overridden
 

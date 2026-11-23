@@ -91,15 +91,3 @@ class DependenciesAnalysisResponse(BaseModel):
     language_breakdown: dict[str, LanguageBreakdown] = Field(default_factory=dict)
     stats: DependenciesStats
     generated_at: datetime
-
-
-class ExternalDependencyDetail(BaseModel):
-    name: str
-    version: str | None = None
-    language: str
-    import_count: int
-    source_files: list[str] = Field(default_factory=list)
-    is_dev_dependency: bool
-    is_outdated: bool | None = None
-    latest_version: str | None = None
-    vulnerability_count: int = 0
