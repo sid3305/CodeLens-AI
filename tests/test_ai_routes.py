@@ -36,5 +36,7 @@ def test_get_summary_never_calls_llm(client, fake_llm):
 
     response = client.get(f"/api/repositories/{repo['id']}/summary")
 
-    assert response.status_code == 404
+    # No summary yet: an empty 200 (null), and the LLM is never called.
+    assert response.status_code == 200
+    assert response.json() is None
     assert fake_llm.calls == []
