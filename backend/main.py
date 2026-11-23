@@ -1,4 +1,6 @@
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -6,12 +8,21 @@ from backend.routers import repositories
 from backend.routers import analysis
 from backend.routers import ai
 from backend.routers import dependencies
+from backend.services.repository_service import sweep_orphan_workspaces
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Remove workspaces left behind by an interrupted import.
+    sweep_orphan_workspaces()
+    yield
 
 
 app = FastAPI(
     title="CodeLens AI API",
     description="Backend API for the CodeLens AI Repository Intelligence Platform.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 

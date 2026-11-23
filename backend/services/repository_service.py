@@ -1,6 +1,6 @@
 
 import json
-import shutil
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
@@ -23,6 +23,9 @@ from utils.parser import read_file_content
 
 REGISTRY_FILE = Path(UPLOAD_DIR) / ".codelens_repositories.json"
 _registry_lock = Lock()
+
+# Workspaces are created as uuid4().hex directories by create_workspace().
+_WORKSPACE_NAME = re.compile(r"[0-9a-f]{32}")
 
 
 def _load_registry():
@@ -305,8 +308,9 @@ def delete_repository(repo_id: str):
             raise ValueError("Invalid repository location.")
 
         # Delete the complete workspace, including analysis results.
+        # remove_tree clears read-only flags (Git object files on Windows).
         if workspace_path.exists():
-            shutil.rmtree(workspace_path)
+            remove_tree(workspace_path)
 
         # Remove the repository from the persistent registry.
         registry.pop(repo_id)
@@ -345,3 +349,40 @@ def save_repository_summary(repo_id: str, summary_data: dict):
         _save_registry(registry)
 
     return summary_data
+
+
+def sweep_orphan_workspaces():
+    """
+    Remove workspace directories that are not in the registry.
+
+    These are left behind when a process is killed mid-import. Only
+    directories named like a workspace id are considered, so nothing else
+    in the upload directory is touched. Must run when no import is in
+    progress (it is called once at application startup).
+    """
+
+    upload_root = Path(UPLOAD_DIR)
+
+    if not upload_root.is_dir():
+        return []
+
+    removed = []
+
+    with _registry_lock:
+        registered = set(_load_registry())
+
+        for entry in sorted(upload_root.iterdir()):
+            if (
+                entry.is_dir()
+                and not entry.is_symlink()
+                and _WORKSPACE_NAME.fullmatch(entry.name)
+                and entry.name not in registered
+            ):
+                try:
+                    remove_tree(entry)
+                except OSError:
+                    continue
+
+                removed.append(entry.name)
+
+    return removed
