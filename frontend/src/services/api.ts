@@ -71,18 +71,9 @@ export const api = {
 
   getRepositories: (signal?: AbortSignal) => request<Repository[]>('/repositories', { signal }),
 
-  uploadRepository: (file: File) => {
-    const formData = new FormData()
-    formData.append('file', file)
-    return request<Repository>('/repositories/upload', { method: 'POST', body: formData })
-  },
-
   /** Validate and normalise a repository link without importing it. */
   parseRepositoryLink: (repoUrl: string, signal?: AbortSignal) =>
     request<RepositoryLinkPreview>('/repositories/github/parse', { ...json({ repo_url: repoUrl }), signal }),
-
-  importGitHub: (repoUrl: string) =>
-    request<Repository>('/repositories/github', json({ repo_url: repoUrl })),
 
   deleteRepository: (repoId: string) =>
     request<{ message: string; repository_id: string }>(repo(repoId), { method: 'DELETE' }),
@@ -95,9 +86,6 @@ export const api = {
       `${repo(repoId)}/files/content?path=${encodeURIComponent(path)}`,
       { signal },
     ),
-
-  analyzeRepository: (repoId: string) =>
-    request<AnalysisResponse>(`${repo(repoId)}/analyze`, { method: 'POST' }),
 
   /** Latest saved analysis, or null if none has been run. */
   getAnalysisResults: (repoId: string, signal?: AbortSignal) =>
@@ -174,16 +162,4 @@ export const api = {
       `${repo(repoId)}/files/explain`,
       json({ file_path: filePath, start_line: start, end_line: end }),
     ),
-
-  /** Cached on the server; `refresh` recomputes it. */
-  getDependenciesAnalysis: (
-    repoId: string,
-    options: { refresh?: boolean; maxNodes?: number; signal?: AbortSignal } = {},
-  ) => {
-    const params = new URLSearchParams({ max_nodes: String(options.maxNodes ?? 200) })
-    if (options.refresh) params.set('refresh', 'true')
-    return request<DependenciesAnalysisResponse>(`${repo(repoId)}/dependencies?${params}`, {
-      signal: options.signal,
-    })
-  },
 }
