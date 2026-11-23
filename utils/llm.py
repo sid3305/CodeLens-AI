@@ -1,9 +1,9 @@
 
 import os
-from dotenv import load_dotenv
 from groq import Groq
 
-load_dotenv()
+# Importing config loads the project's .env file.
+import utils.config  # noqa: F401
 
 MODEL_NAME = "openai/gpt-oss-120b"
 

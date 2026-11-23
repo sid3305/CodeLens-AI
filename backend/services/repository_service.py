@@ -8,8 +8,8 @@ from urllib.parse import urlparse
 
 from fastapi import UploadFile
 
+from utils.config import get_registry_file, get_upload_dir
 from utils.file_handler import (
-    UPLOAD_DIR,
     MAX_ARCHIVE_SIZE,
     create_workspace,
     extract_zip,
@@ -21,7 +21,6 @@ from utils.security import is_sensitive_file
 from utils.parser import read_file_content
 
 
-REGISTRY_FILE = Path(UPLOAD_DIR) / ".codelens_repositories.json"
 _registry_lock = Lock()
 
 # Workspaces are created as uuid4().hex directories by create_workspace().
@@ -31,11 +30,13 @@ _WORKSPACE_NAME = re.compile(r"[0-9a-f]{32}")
 def _load_registry():
     """Load previously imported repositories."""
 
-    if not REGISTRY_FILE.exists():
+    registry_file = get_registry_file()
+
+    if not registry_file.exists():
         return {}
 
     try:
-        with REGISTRY_FILE.open("r", encoding="utf-8") as file:
+        with registry_file.open("r", encoding="utf-8") as file:
             data = json.load(file)
             return data if isinstance(data, dict) else {}
     except (OSError, json.JSONDecodeError):
@@ -45,14 +46,15 @@ def _load_registry():
 def _save_registry(registry):
     """Persist repository metadata."""
 
-    REGISTRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    registry_file = get_registry_file()
+    registry_file.parent.mkdir(parents=True, exist_ok=True)
 
-    temporary_file = REGISTRY_FILE.with_suffix(".tmp")
+    temporary_file = registry_file.with_suffix(".tmp")
 
     with temporary_file.open("w", encoding="utf-8") as file:
         json.dump(registry, file, indent=4)
 
-    temporary_file.replace(REGISTRY_FILE)
+    temporary_file.replace(registry_file)
 
 
 def _register_repository(repo_id, name, source, repo_path):
@@ -109,7 +111,7 @@ def get_repository(repo_id):
         raise ValueError("Repository not found.")
 
     repo_path = Path(repository["path"]).resolve()
-    upload_root = Path(UPLOAD_DIR).resolve()
+    upload_root = get_upload_dir()
 
     try:
         repo_path.relative_to(upload_root)
@@ -280,7 +282,7 @@ def get_file_content(repo_id, relative_path):
 def delete_repository(repo_id: str):
     """Delete a repository's workspace and registry entry safely."""
 
-    upload_root = Path(UPLOAD_DIR).resolve()
+    upload_root = get_upload_dir()
     workspace_path = upload_root / repo_id
 
     with _registry_lock:
@@ -361,7 +363,7 @@ def sweep_orphan_workspaces():
     progress (it is called once at application startup).
     """
 
-    upload_root = Path(UPLOAD_DIR)
+    upload_root = get_upload_dir()
 
     if not upload_root.is_dir():
         return []

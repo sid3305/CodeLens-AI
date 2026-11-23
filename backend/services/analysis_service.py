@@ -7,7 +7,7 @@ from threading import Lock
 from utils.security import redact_secrets
 
 from utils.analysis_engine import run_all_analyzers
-from utils.file_handler import UPLOAD_DIR
+from utils.config import get_upload_dir
 
 from backend.services.repository_service import get_repository
 
@@ -38,8 +38,8 @@ def _sanitize_finding_data(value):
 def _results_file(repo_id):
     """Get the persistent results file for a repository."""
 
-    workspace = (Path(UPLOAD_DIR) / repo_id).resolve()
-    upload_root = Path(UPLOAD_DIR).resolve()
+    upload_root = get_upload_dir()
+    workspace = (upload_root / repo_id).resolve()
 
     try:
         workspace.relative_to(upload_root)

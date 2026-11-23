@@ -37,27 +37,8 @@ def _block_live_llm(monkeypatch):
 def upload_root(tmp_path, monkeypatch):
     """Redirect the repository store to an isolated temporary directory."""
 
-    root = tmp_path / "uploads"
+    root = (tmp_path / "uploads").resolve()
     monkeypatch.setenv("CODELENS_UPLOAD_DIR", str(root))
-
-    from utils import file_handler
-
-    monkeypatch.setattr(file_handler, "UPLOAD_DIR", root, raising=False)
-
-    from backend.services import repository_service
-    from backend.services import analysis_service
-
-    for module in (repository_service, analysis_service):
-        if hasattr(module, "UPLOAD_DIR"):
-            monkeypatch.setattr(module, "UPLOAD_DIR", root)
-
-    if hasattr(repository_service, "REGISTRY_FILE"):
-        monkeypatch.setattr(
-            repository_service,
-            "REGISTRY_FILE",
-            root / ".codelens_repositories.json",
-        )
-
     return root
 
 

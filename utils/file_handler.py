@@ -10,10 +10,10 @@ import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
+from utils.config import get_upload_dir
+
 
 # ---------------- CONFIGURATION ----------------
-
-UPLOAD_DIR = Path("uploads")
 
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024       # 100 MB
 MAX_EXTRACTED_SIZE = 500 * 1024 * 1024     # 500 MB
@@ -50,14 +50,14 @@ SENSITIVE_FILENAMES = {
 # ---------------- WORKSPACE ----------------
 
 def ensure_upload_dir():
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    get_upload_dir().mkdir(parents=True, exist_ok=True)
 
 
 def create_workspace():
     """Create a unique workspace for every imported repository."""
     ensure_upload_dir()
 
-    workspace = UPLOAD_DIR / uuid.uuid4().hex
+    workspace = get_upload_dir() / uuid.uuid4().hex
     workspace.mkdir(parents=True, exist_ok=False)
 
     return workspace
