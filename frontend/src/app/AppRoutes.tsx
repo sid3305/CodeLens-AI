@@ -1,5 +1,5 @@
 import { lazy, useState } from 'react'
-import { Navigate, Outlet, Route, Routes, useLocation, useParams, useSearchParams } from 'react-router'
+import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from 'react-router'
 
 import AppShell from '../components/layout/AppShell'
 import { LoadingBlock } from '../components/ui'
@@ -119,6 +119,7 @@ function IssuesRoute() {
 
 function FileRoute() {
   const { repository } = useRepositoryContext()
+  const navigate = useNavigate()
   const params = useParams()
   const { hash } = useLocation()
   const path = params['*'] || null
@@ -130,6 +131,8 @@ function FileRoute() {
       repository={repository}
       path={path}
       line={lineFromHash(hash)}
+      // Clicking a line number updates #L<line> without a new history entry.
+      onSelectLine={(selected) => path && navigate(paths.file(repository.id, path, selected), { replace: true })}
     />
   )
 }

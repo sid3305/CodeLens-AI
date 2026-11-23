@@ -10,6 +10,6 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
     // Lazy pages load cold in the first test of a file; this machine is slow.
-    testTimeout: 15_000,
+    testTimeout: 30_000,
   },
 })

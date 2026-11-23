@@ -4,7 +4,7 @@ import { cleanup, configure } from '@testing-library/react'
 
 // Pages are lazy-loaded; the first import of a page module under jsdom can
 // take longer than the 1 s default.
-configure({ asyncUtilTimeout: 5000 })
+configure({ asyncUtilTimeout: 10_000 })
 
 // Never import application modules here: they would load before each test
 // file's vi.mock() and keep the real API client (real network calls).

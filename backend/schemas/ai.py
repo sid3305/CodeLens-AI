@@ -51,15 +51,22 @@ class FindingAiResponse(BaseModel):
     sent: FindingAiSent
 
 
+MAX_SELECTION_LINES = 400
+
+
 class ExplainRequest(BaseModel):
-    """Request to explain a specific file."""
+    """Request to explain a file, or only some of its lines (C5)."""
     file_path: str = Field(..., description="Repository-relative file path")
+    start_line: int | None = Field(None, ge=1, description="First selected line (1-based)")
+    end_line: int | None = Field(None, ge=1, description="Last selected line (inclusive)")
 
 
 class ExplainResponse(BaseModel):
     """AI-generated file explanation response."""
     repository_id: str
     file_path: str
+    start_line: int | None = None
+    end_line: int | None = None
     explanation: str
     generated_at: str
     truncated: bool = False

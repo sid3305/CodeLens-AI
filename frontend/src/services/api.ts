@@ -158,6 +158,13 @@ export const api = {
   explainFile: (repoId: string, filePath: string) =>
     request<ExplainResponse>(`${repo(repoId)}/files/explain`, json({ file_path: filePath })),
 
+  /** C5: sends only lines start..end of the file to the AI. */
+  explainSelection: (repoId: string, filePath: string, start: number, end: number) =>
+    request<ExplainResponse>(
+      `${repo(repoId)}/files/explain`,
+      json({ file_path: filePath, start_line: start, end_line: end }),
+    ),
+
   /** Cached on the server; `refresh` recomputes it. */
   getDependenciesAnalysis: (
     repoId: string,

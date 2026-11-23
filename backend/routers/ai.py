@@ -7,6 +7,7 @@ from agents.explain_agent import run_explain_agent
 from agents.finding_agent import code_window, run_finding_agent
 from agents.repo_agent import run_repo_agent
 from backend.schemas.ai import (
+    MAX_SELECTION_LINES,
     AiConsentRequest,
     AiConsentResponse,
     ExplainRequest,
@@ -262,12 +263,26 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
         if content.startswith("Error reading file:"):
             raise ValueError("Unable to read this file.")
 
+        # C5: "Explain selection" sends only the selected lines.
+        start, end = request.start_line, request.end_line
+        if (start is None) != (end is None):
+            raise ValueError("Give both the first and the last selected line.")
+        if start is not None:
+            lines = content.splitlines()
+            if end < start or end > len(lines):
+                raise ValueError("The selected lines are not in this file.")
+            if end - start + 1 > MAX_SELECTION_LINES:
+                raise ValueError(f"Select at most {MAX_SELECTION_LINES} lines.")
+            content = "\n".join(lines[start - 1:end])
+
         # Generate explanation using the explain agent
         explanation_text = run_explain_agent(content, str(file_path))
 
         return ExplainResponse(
             repository_id=repo_id,
             file_path=request.file_path,
+            start_line=start,
+            end_line=end,
             explanation=explanation_text,
             generated_at=datetime.now(timezone.utc).isoformat(),
             truncated=len(content) > 12000,

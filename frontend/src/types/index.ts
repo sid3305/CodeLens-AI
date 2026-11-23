@@ -149,6 +149,9 @@ export interface SummaryResponse {
 export interface ExplainResponse {
   repository_id: string
   file_path: string
+  /** Set when only some lines were explained (C5). */
+  start_line?: number | null
+  end_line?: number | null
   explanation: string
   generated_at: string
   truncated: boolean

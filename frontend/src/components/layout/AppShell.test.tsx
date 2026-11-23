@@ -1,3 +1,4 @@
+import '../../test/codemirror'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -288,7 +289,8 @@ describe('AppShell link import focus (X1, B3)', () => {
 
     await importLink('src/app.py')
 
-    expect(await screen.findByText('print("focused")')).toBeInTheDocument()
+    // Highlighted by the code viewer, so the text spans several elements.
+    await waitFor(() => expect(document.querySelector('.cm-content')).toHaveTextContent('print("focused")'))
   })
 })
 

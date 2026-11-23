@@ -356,3 +356,41 @@ def test_missing_key_is_a_clear_503(client):
 
     assert response.status_code == 503
     assert response.json()["detail"] == "AI is not set up: add GROQ_API_KEY to .env and restart the backend."
+
+
+# --- Explain selection (C5) -------------------------------------------------------------
+
+
+def test_explain_selection_sends_only_the_selected_lines(client, fake_llm):
+    lines = "\n".join(f"value_{n} = {n}" for n in range(1, 41)) + "\n"
+    repo = upload_repo(client, {"app/main.py": lines})
+    allow_ai(client, repo)
+
+    response = client.post(
+        f"/api/repositories/{repo['id']}/files/explain",
+        json={"file_path": "app/main.py", "start_line": 10, "end_line": 12},
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["start_line"] == 10 and body["end_line"] == 12
+    (prompt,) = fake_llm.calls
+    assert "value_10 = 10" in prompt and "value_12 = 12" in prompt
+    assert "value_9 = 9" not in prompt and "value_13 = 13" not in prompt
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [(0, 3), (5, 2), (1, 999), (1, 401)],
+)
+def test_explain_selection_rejects_bad_ranges(client, fake_llm, start, end):
+    repo = upload_repo(client, {"app/main.py": "\n".join(f"x{n} = {n}" for n in range(1, 501)) + "\n"})
+    allow_ai(client, repo)
+
+    response = client.post(
+        f"/api/repositories/{repo['id']}/files/explain",
+        json={"file_path": "app/main.py", "start_line": start, "end_line": end},
+    )
+
+    assert response.status_code in (400, 422)
+    assert fake_llm.calls == []

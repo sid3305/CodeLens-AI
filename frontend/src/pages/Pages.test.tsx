@@ -1,4 +1,7 @@
+import '../test/codemirror'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { EditorSelection } from '@codemirror/state'
+import { EditorView } from '@codemirror/view'
 import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/render'
@@ -22,6 +25,7 @@ vi.mock('../services/api', async (importOriginal) => {
       generateSummary: vi.fn(),
       getFileContent: vi.fn(),
       explainFile: vi.fn(),
+      explainSelection: vi.fn(),
     },
   }
 })
@@ -60,8 +64,8 @@ function deferred<T>() {
 }
 
 const overview = (repo: Repository) => <OverviewPage key={repo.id} repository={repo} />
-const preview = (path: string | null) => (
-  <FilePreviewPage key={`${repoA.id}:${path}`} repository={repoA} path={path} line={null} />
+const preview = (path: string | null, onSelectLine: (line: number) => void = vi.fn()) => (
+  <FilePreviewPage key={`${repoA.id}:${path}`} repository={repoA} path={path} line={null} onSelectLine={onSelectLine} />
 )
 
 beforeEach(() => {
@@ -274,5 +278,69 @@ describe('AI consent gates every AI action (B6)', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: /explain this file/i })).toBeEnabled())
     expect(mockedApi.explainFile).not.toHaveBeenCalled()
+  })
+})
+
+describe('code viewer in the file preview (C5)', () => {
+  const selectLines = (from: number, to: number) => {
+    const view = EditorView.findFromDOM(document.querySelector('.cm-editor') as HTMLElement)!
+    act(() => view.dispatch({ selection: EditorSelection.range(view.state.doc.line(from).from, view.state.doc.line(to).to) }))
+  }
+
+  beforeEach(() => {
+    mockedApi.getFileContent.mockImplementation(async (id: string, path: string) => ({
+      repository_id: id, path, content: 'first = 1\nsecond = 2\nthird = 3\nfourth = 4\n',
+    }))
+  })
+
+  it('explains only the selected lines, on request', async () => {
+    mockedApi.explainSelection.mockResolvedValue({
+      repository_id: repoA.id, file_path: 'a.py', start_line: 2, end_line: 3,
+      explanation: 'Lines two and three.', generated_at: '', truncated: false,
+    })
+    const user = userEvent.setup()
+    renderWithProviders(preview('a.py'))
+    await waitFor(() => expect(document.querySelector('.cm-editor')).not.toBeNull())
+
+    selectLines(2, 3)
+    expect(await screen.findByText('Selected lines 2–3')).toBeInTheDocument()
+    expect(mockedApi.explainSelection).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Explain selection' }))
+
+    expect(mockedApi.explainSelection).toHaveBeenCalledWith(repoA.id, 'a.py', 2, 3)
+    expect(await screen.findByRole('heading', { name: 'AI explanation of lines 2–3' })).toBeInTheDocument()
+    expect(screen.getByText('Lines two and three.')).toBeInTheDocument()
+    expect(mockedApi.explainFile).not.toHaveBeenCalled()
+  })
+
+  it('cannot explain a selection until AI is allowed', async () => {
+    mockedApi.getAiConsent.mockImplementation(async (id: string) => ({ repository_id: id, enabled: false, provider: 'Groq', model: 'test-model', configured: true, problem: null }))
+    renderWithProviders(preview('a.py'))
+    await waitFor(() => expect(document.querySelector('.cm-editor')).not.toBeNull())
+
+    selectLines(1, 2)
+
+    expect(await screen.findByRole('button', { name: 'Explain selection' })).toBeDisabled()
+  })
+
+  it('lists the findings in the file, each linking to its line', async () => {
+    mockedApi.getAnalysisResults.mockResolvedValue({
+      repository_id: repoA.id, repository_name: 'repo-a', status: 'completed', analyzed_at: '',
+      summary: { total_findings: 1, raw_total_findings: 1, duplicates_removed: 0, severity_counts: {}, category_counts: {}, tool_counts: {} },
+      tool_status: {},
+      findings: [
+        { id: 'F1', title: 'Broad except', severity: 'Medium', category: 'Quality', file: 'a.py', line: 3, rule_id: 'E722', detected_by: ['Ruff'], description: '', recommendation: '' },
+        { id: 'F2', title: 'Elsewhere', severity: 'High', category: 'Quality', file: 'b.py', line: 1, rule_id: 'X', detected_by: ['Ruff'], description: '', recommendation: '' },
+      ],
+    })
+    const onSelectLine = vi.fn()
+    const user = userEvent.setup()
+    renderWithProviders(preview('a.py', onSelectLine))
+
+    await user.click(await screen.findByRole('button', { name: 'Line 3: Broad except' }))
+
+    expect(onSelectLine).toHaveBeenCalledWith(3)
+    expect(screen.getByRole('heading', { name: 'Findings in this file (1)' })).toBeInTheDocument()
+    expect(document.querySelectorAll('.cm-finding-marker')).toHaveLength(1)
   })
 })
