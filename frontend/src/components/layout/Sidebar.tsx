@@ -12,8 +12,7 @@ import {
   Trash2,
 } from 'lucide-react'
 
-import { useRef, useState } from 'react'
-import type { ChangeEvent } from 'react'
+import { useState } from 'react'
 import type {
   WorkspaceSection,
   Repository,
@@ -21,6 +20,7 @@ import type {
 } from '../../types'
 
 import FileExplorer from '../explorer/FileExplorer'
+import ImportPanel from '../import/ImportPanel'
 
 interface SidebarProps {
   activeSection: WorkspaceSection
@@ -34,8 +34,10 @@ interface SidebarProps {
   selectedFilePath: string | null
   onSelectFile: (path: string) => void
 
-  onImportZip: (file: File) => Promise<void>
-  onImportGitHub: (url: string) => Promise<void>
+  onImportZip: (file: File) => Promise<boolean | void>
+  onImportGitHub: (url: string) => Promise<boolean | void>
+  /** Folder or file to reveal in the explorer (from a link import). */
+  explorerFocusPath?: string | null
   onDeleteRepository: (repository: Repository) => void
 
   importing: boolean
@@ -65,13 +67,13 @@ export default function Sidebar({
   importing,
   loading,
   issueCount,
+  explorerFocusPath = null,
 }: SidebarProps) {
   const [explorerOpen, setExplorerOpen] = useState(true)
   const [workspaceOpen, setWorkspaceOpen] = useState(true)
   const [managerOpen, setManagerOpen] = useState(true)
   const [repositorySearch, setRepositorySearch] = useState('')
-
-  const zipInputRef = useRef<HTMLInputElement>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const selectedRepository = repositories.find(
     (repo) => repo.id === selectedRepositoryId,
@@ -81,24 +83,11 @@ export default function Sidebar({
     repo.name.toLowerCase().includes(repositorySearch.toLowerCase()),
   )
 
-  const handleGitHubImport = async () => {
-    const url = window.prompt('Enter the public GitHub repository URL:')
-
-    if (!url?.trim()) return
-
-    await onImportGitHub(url.trim())
-  }
-
-  const handleZipChange = async (
-    event: ChangeEvent<HTMLInputElement>,
-  ) => {
-    const file = event.target.files?.[0]
-
-    if (file) {
-      await onImportZip(file)
-      event.target.value = ''
-    }
-  }
+  const closeAfter = (task: Promise<boolean | void>) =>
+    task.then((ok) => {
+      if (ok !== false) setImportOpen(false)
+      return ok
+    })
 
   return (
     <aside className="sidebar">
@@ -121,6 +110,8 @@ export default function Sidebar({
 
           {explorerOpen && (
             <FileExplorer
+              key={`${selectedRepositoryId ?? ''}:${explorerFocusPath ?? ''}`}
+              focusPath={explorerFocusPath}
               files={files}
               repositoryName={selectedRepository?.name ?? ''}
               selectedFilePath={selectedFilePath}
@@ -227,31 +218,24 @@ export default function Sidebar({
 
               <div className="sidebar-divider" />
 
-              <input
-                ref={zipInputRef}
-                type="file"
-                accept=".zip,application/zip,application/x-zip-compressed"
-                hidden
-                onChange={handleZipChange}
-              />
-
               <button
+                type="button"
                 className="manager-action"
-                disabled={importing}
-                onClick={() => zipInputRef.current?.click()}
+                aria-expanded={importOpen}
+                onClick={() => setImportOpen(!importOpen)}
               >
-                <Upload size={15} />
-                {importing ? 'Importing...' : 'Import ZIP'}
+                <Upload size={15} aria-hidden="true" />
+                Import repository
               </button>
 
-              <button
-                className="manager-action"
-                disabled={importing}
-                onClick={handleGitHubImport}
-              >
-                <Code2 size={15} />
-                Import from GitHub
-              </button>
+              {importOpen && (
+                <ImportPanel
+                  compact
+                  importing={importing}
+                  onImportLink={(url) => closeAfter(onImportGitHub(url))}
+                  onImportZip={(file) => closeAfter(onImportZip(file))}
+                />
+              )}
             </div>
           )}
         </section>

@@ -60,6 +60,7 @@ export default function AppShell() {
   // late responses for a previous selection are ignored.
   const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null)
   const [fileSelection, setFileSelection] = useState<FileSelection | null>(null)
+  const [explorerFocus, setExplorerFocus] = useState<{ repoId: string; path: string } | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
@@ -197,8 +198,10 @@ export default function AppShell() {
       await loadRepositories()
       selectRepository(repository.id)
       setNotice({ tone: 'success', text: `${repository.name} imported successfully.` })
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'ZIP import failed.')
+      return false
     } finally {
       setImporting(false)
     }
@@ -214,11 +217,27 @@ export default function AppShell() {
 
       await loadRepositories()
       selectRepository(repository.id)
-      setNotice({ tone: 'success', text: `${repository.name} imported successfully.` })
+      setNotice({
+        tone: 'success',
+        text: `${repository.name}${repository.ref ? ` @ ${repository.ref}` : ''} imported successfully.`,
+      })
+      if (repository.focus_path) await openFocus(repository.id, repository.focus_path)
+      return true
     } catch (err) {
       setError(err instanceof Error ? err.message : 'GitHub import failed.')
+      return false
     } finally {
       setImporting(false)
+    }
+  }
+
+  /** Open what a link pointed at: a file in the preview, a folder in the explorer. */
+  const openFocus = async (repoId: string, focusPath: string) => {
+    const listing = await api.getFiles(repoId)
+    if (listing.files.some((file) => file.path === focusPath)) {
+      await handleSelectFile(focusPath, null, repoId)
+    } else {
+      setExplorerFocus({ repoId, path: focusPath })
     }
   }
 
@@ -250,10 +269,11 @@ export default function AppShell() {
   const handleSelectFile = async (
     path: string,
     lineNumber: number | null = null,
+    repoIdOverride: string | null = null,
   ) => {
-    if (!selectedRepositoryId) return
+    const repoId = repoIdOverride ?? selectedRepositoryId
+    if (!repoId) return
 
-    const repoId = selectedRepositoryId
     const isStillSelected = (current: FileSelection | null): current is FileSelection =>
       current !== null && current.repoId === repoId && current.path === path
 
@@ -323,6 +343,11 @@ export default function AppShell() {
           importing={importing}
           loading={loading}
           issueCount={analysis ? analysis.findings.length : null}
+          explorerFocusPath={
+            explorerFocus && explorerFocus.repoId === selectedRepositoryId
+              ? explorerFocus.path
+              : null
+          }
         />
       )}
 
@@ -411,6 +436,7 @@ export default function AppShell() {
             onRefresh={loadRepositories}
             onImportZip={handleImportZip}
             onImportGitHub={handleImportGitHub}
+            importing={importing}
             selectedLine={selectedLine}
             onOpenFinding={handleSelectFile}  
           />

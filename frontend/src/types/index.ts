@@ -14,6 +14,23 @@ export interface Repository {
   source: 'zip' | 'github'
   file_count: number
   created_at: string
+  /** Branch, tag or commit a link import pointed at. */
+  ref?: string | null
+  /** Folder or file the link pointed at, opened after import. */
+  focus_path?: string | null
+  source_url?: string | null
+}
+
+/** Normalised form of a pasted repository link (no clone performed). */
+export interface RepositoryLinkPreview {
+  host: string
+  owner: string
+  repo: string
+  ref: string | null
+  ref_kind: 'branch' | 'commit' | null
+  focus_path: string | null
+  display: string
+  url: string
 }
 
 export interface RepositoryFile {

@@ -51,3 +51,17 @@ describe('Sidebar navigation (A10)', () => {
     expect(screen.getByRole('button', { name: /issues/i })).toHaveTextContent('7')
   })
 })
+
+describe('Sidebar import (X1)', () => {
+  it('imports through the panel instead of a browser prompt', async () => {
+    const prompt = vi.spyOn(window, 'prompt')
+    const { default: userEvent } = await import('@testing-library/user-event')
+    const user = userEvent.setup()
+    render(<Sidebar {...props()} />)
+
+    await user.click(screen.getByRole('button', { name: /import repository/i }))
+
+    expect(screen.getByLabelText(/repository link/i)).toBeInTheDocument()
+    expect(prompt).not.toHaveBeenCalled()
+  })
+})

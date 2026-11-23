@@ -6,6 +6,7 @@ from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from backend.schemas.repository import (
     GitHubImportRequest,
     RepositoryFilesResponse,
+    RepositoryLinkPreview,
     RepositoryResponse,
 )
 from backend.services import dependency_service
@@ -17,6 +18,7 @@ from backend.services.repository_service import (
     list_repositories,
     list_repository_files,
 )
+from utils.repo_url import parse_repository_url
 
 router = APIRouter(
     prefix="/api/repositories",
@@ -46,6 +48,27 @@ async def upload_repository(file: Annotated[UploadFile, File()]):
             status_code=500,
             detail="Unable to import the uploaded repository.",
         )
+
+
+@router.post("/github/parse", response_model=RepositoryLinkPreview)
+def preview_github_link(request: GitHubImportRequest):
+    """Validate and normalise a repository link without cloning it."""
+
+    try:
+        parsed = parse_repository_url(request.repo_url)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+
+    return {
+        "host": parsed.host,
+        "owner": parsed.owner,
+        "repo": parsed.repo,
+        "ref": parsed.ref,
+        "ref_kind": parsed.ref_kind,
+        "focus_path": parsed.focus_path,
+        "display": parsed.display,
+        "url": parsed.url,
+    }
 
 
 @router.post("/github", response_model=RepositoryResponse)

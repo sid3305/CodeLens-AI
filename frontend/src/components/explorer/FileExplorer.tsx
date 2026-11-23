@@ -23,6 +23,8 @@ interface TreeNode {
 }
 
 interface FileExplorerProps {
+  /** Folder (or file) to reveal: it and all its ancestors start expanded. */
+  focusPath?: string | null
   files: RepositoryFile[]
   repositoryName: string
   selectedFilePath: string | null
@@ -88,12 +90,17 @@ function FileIcon({ file }: { file: TreeNode }) {
 }
 
 export default function FileExplorer({
+  focusPath = null,
   files,
   repositoryName,
   selectedFilePath,
   onSelectFile,
 }: FileExplorerProps) {
-  const [expanded, setExpanded] = useState<string[]>([])
+  const [expanded, setExpanded] = useState<string[]>(() => {
+    if (!focusPath) return []
+    const parts = focusPath.split('/').filter(Boolean)
+    return parts.map((_, index) => parts.slice(0, index + 1).join('/'))
+  })
   const [query, setQuery] = useState('')
 
   const tree = useMemo(() => buildFileTree(files), [files])

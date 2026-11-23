@@ -114,14 +114,13 @@ def test_is_portable_name(name, portable):
 @pytest.mark.parametrize(
     ("url", "message"),
     [
-        ("http://github.com/a/b", "HTTPS GitHub"),
-        ("https://gitlab.com/a/b", "HTTPS GitHub"),
-        ("https://github.com.evil.com/a/b", "HTTPS GitHub"),
+        # X1 accepts http://, query strings, fragments and sub-pages; the full
+        # table of accepted and rejected links is in tests/test_repo_url.py.
+        ("https://gitlab.com/a/b", "GitHub"),
+        ("https://github.com.evil.com/a/b", "GitHub"),
         ("https://user:pw@github.com/a/b", "credentials"),
-        ("https://github.com/a/b?x=1", "extra parameters"),
-        ("https://github.com/a/b#readme", "extra parameters"),
-        ("https://github.com/a", "format"),
-        ("https://github.com/a/b/c", "format"),
+        ("ssh://git@github.com/a/b", "https://"),
+        ("https://github.com/a", "owner/repository"),
         ("https://github.com/a;rm/b", "owner"),
         ("https://github.com/a/b$(id)", "repository name"),
     ],
@@ -150,10 +149,14 @@ def test_clone_uses_a_safe_argument_list(monkeypatch):
 
     clone_github_repo("https://github.com/owner/repo.git")
 
-    assert captured["args"][:5] == ["git", "clone", "--depth", "1", "--"]
-    assert captured["args"][5] == "https://github.com/owner/repo.git"
+    args = captured["args"]
+    assert args[0] == "git" and "clone" in args
+    # Options end before the URL, so nothing user-controlled can be an option.
+    assert args[args.index("--") + 1] == "https://github.com/owner/repo.git"
+    assert args[-1].endswith("repository")
     assert "shell" not in captured["kwargs"]
     assert captured["kwargs"]["timeout"] > 0
+    assert captured["kwargs"]["env"]["GIT_TERMINAL_PROMPT"] == "0"
 
 
 @pytest.mark.parametrize(
@@ -161,7 +164,8 @@ def test_clone_uses_a_safe_argument_list(monkeypatch):
     [
         (subprocess.TimeoutExpired(["git"], 180), "timed out"),
         (FileNotFoundError(), "Git is not installed"),
-        (subprocess.CalledProcessError(128, ["git"], stderr="fatal: nope"), "fatal: nope"),
+        # git's own message (it contains local paths) is logged, not returned.
+        (subprocess.CalledProcessError(128, ["git"], stderr="fatal: nope"), "could not clone"),
     ],
 )
 def test_clone_errors_become_runtime_errors(monkeypatch, error, message):

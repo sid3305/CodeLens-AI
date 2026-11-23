@@ -4,7 +4,6 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 from threading import Lock
-from urllib.parse import urlparse
 
 from fastapi import UploadFile
 
@@ -56,8 +55,8 @@ def _save_registry(registry):
     temporary_file.replace(registry_file)
 
 
-def _register_repository(repo_id, name, source, repo_path):
-    """Save repository metadata and return its record."""
+def _register_repository(repo_id, name, source, repo_path, **metadata):
+    """Save repository metadata (plus optional ref/focus_path/source_url)."""
 
     code_files = get_code_files(repo_path)
 
@@ -73,6 +72,7 @@ def _register_repository(repo_id, name, source, repo_path):
         "path": str(Path(repo_path).resolve()),
         "file_count": len(code_files),
         "created_at": datetime.now(timezone.utc).isoformat(),
+        **metadata,
     }
 
     with _registry_lock:
@@ -191,22 +191,20 @@ async def import_zip_repository(upload: UploadFile):
 def import_github_repository(repo_url):
     """Clone and register a GitHub repository."""
 
-    repo_path = Path(clone_github_repo(repo_url)).resolve()
-
+    cloned = clone_github_repo(repo_url)
+    repo_path = Path(cloned.path).resolve()
     workspace = repo_path.parent
-
-    parsed_url = urlparse(repo_url)
-    repository_name = parsed_url.path.rstrip("/").split("/")[-1]
-
-    if repository_name.lower().endswith(".git"):
-        repository_name = repository_name[:-4]
+    source = cloned.source
 
     try:
         return _register_repository(
             repo_id=workspace.name,
-            name=repository_name,
+            name=source.repo,
             source="github",
             repo_path=repo_path,
+            ref=source.ref,
+            focus_path=source.focus_path,
+            source_url=source.url,
         )
 
     except Exception:

@@ -16,6 +16,20 @@ class RepositoryResponse(BaseModel):
     source: str
     file_count: int
     created_at: str
+    ref: str | None = None
+    focus_path: str | None = None
+    source_url: str | None = None
+
+
+class RepositoryLinkPreview(BaseModel):
+    host: str
+    owner: str
+    repo: str
+    ref: str | None = None
+    ref_kind: str | None = None
+    focus_path: str | None = None
+    display: str
+    url: str
 
 
 class RepositoryFileResponse(BaseModel):

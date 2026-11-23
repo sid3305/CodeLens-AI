@@ -1,5 +1,6 @@
 
 import fnmatch
+import logging
 import os
 import re
 import shutil
@@ -7,11 +8,14 @@ import subprocess
 import sys
 import uuid
 import zipfile
+from dataclasses import dataclass, replace
 from pathlib import Path, PurePosixPath
-from urllib.parse import urlparse
 
 from utils.config import get_upload_dir
+from utils.repo_url import RepositoryURL, parse_repository_url
 from utils.security import is_link
+
+logger = logging.getLogger(__name__)
 
 # ---------------- CONFIGURATION ----------------
 
@@ -200,47 +204,123 @@ def extract_zip(zip_path):
 
 # ---------------- GITHUB REPOSITORY ----------------
 
+@dataclass(frozen=True)
+class ClonedRepository:
+    path: str
+    source: RepositoryURL  # with the ref and focus path that were actually used
+
+
+class _RefNotFound(Exception):
+    pass
+
+
+_PRIVATE_MARKERS = (
+    "repository not found",
+    "could not read username",
+    "authentication failed",
+    "terminal prompts disabled",
+    "returned error: 401",
+    "returned error: 403",
+)
+_REF_MARKERS = (
+    "not found in upstream",
+    "could not find remote branch",
+    "couldn't find remote ref",
+    "unadvertised object",
+)
+
+
 def clone_github_repo(repo_url):
     """
-    Clone a public GitHub repository into an isolated workspace.
+    Clone a public repository link (any form accepted by
+    utils.repo_url.parse_repository_url) into an isolated workspace.
+
+    Raises ValueError for links that are invalid, private or point at a
+    missing branch, RuntimeError for other git failures.
     """
 
-    parsed = urlparse(repo_url.strip())
-
-    if parsed.scheme != "https" or parsed.hostname != "github.com":
-        raise ValueError("Please provide a valid HTTPS GitHub repository URL.")
-
-    if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError("GitHub URL must not contain credentials or extra parameters.")
-
-    parts = [part for part in parsed.path.strip("/").split("/") if part]
-
-    if len(parts) != 2:
-        raise ValueError("Use the format: https://github.com/owner/repository")
-
-    owner, repository = parts
-    repository = repository.removesuffix(".git")
-
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", owner):
-        raise ValueError("Invalid GitHub owner name.")
-
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+", repository):
-        raise ValueError("Invalid repository name.")
+    source = parse_repository_url(repo_url)
 
     workspace = create_workspace()
     repo_folder = workspace / "repository"
 
-    clone_url = f"https://github.com/{owner}/{repository}.git"
-
     try:
-        _clone(clone_url, repo_folder)
+        used = _clone(source, repo_folder)
         _remove_links(repo_folder)
         _enforce_repository_limits(repo_folder)
     except BaseException:
         remove_tree(workspace)
         raise
 
-    return str(repo_folder)
+    return ClonedRepository(path=str(repo_folder), source=used)
+
+
+def _clone(source, repo_folder):
+    """Shallow clone of the requested ref; returns the source actually cloned."""
+
+    if source.ref_kind == "commit":
+        _run_git(["init", "-q", str(repo_folder)])
+        _run_git(["-C", str(repo_folder), "fetch", "-q", "--depth", "1", "--", source.clone_url, source.ref])
+        _run_git(["-C", str(repo_folder), "checkout", "-q", "--detach", "FETCH_HEAD"])
+        return source
+
+    if not source.ref:
+        _run_git(["clone", "-q", "--depth", "1", "--", source.clone_url, str(repo_folder)])
+        return source
+
+    for ref, focus_path in source.ref_candidates:
+        try:
+            _run_git([
+                "clone", "-q", "--depth", "1", "--single-branch",
+                "--branch", ref,
+                "--", source.clone_url, str(repo_folder),
+            ])
+        except _RefNotFound:
+            if repo_folder.exists():
+                remove_tree(repo_folder)
+            continue
+        return replace(source, ref=ref, focus_path=focus_path)
+
+    raise ValueError(
+        f"Branch or tag '{source.ref}' was not found in {source.owner}/{source.repo}."
+    )
+
+
+def _run_git(args):
+    """
+    Run git with an argv list (never a shell), no credential prompts and a
+    timeout. Private repositories therefore fail fast instead of opening a
+    credential dialog.
+    """
+
+    command = ["git", "-c", "credential.helper=", "-c", "core.askPass=", *args]
+    env = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GCM_INTERACTIVE": "never"}
+
+    try:
+        subprocess.run(
+            command,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env=env,
+        )
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("Repository cloning timed out.")
+    except FileNotFoundError:
+        raise RuntimeError("Git is not installed or is not available in your system PATH.")
+    except subprocess.CalledProcessError as error:
+        stderr = (error.stderr or "").strip()
+        lowered = stderr.lower()
+        if any(marker in lowered for marker in _PRIVATE_MARKERS):
+            raise ValueError(
+                "Repository not found or private. Only public repositories can be "
+                "imported; check the link and that the repository is public."
+            ) from None
+        if any(marker in lowered for marker in _REF_MARKERS):
+            raise _RefNotFound(stderr) from None
+        logger.warning("git failed: %s", stderr or error)
+        raise RuntimeError("Git could not clone the repository.") from None
 
 
 def _remove_links(folder):
@@ -285,38 +365,6 @@ def _enforce_repository_limits(folder):
                 raise ValueError(
                     f"Repository has more than {MAX_REPOSITORY_FILES:,} files."
                 )
-
-
-def _clone(clone_url, repo_folder):
-    """Shallow-clone a repository, translating failures to RuntimeError."""
-
-    try:
-        subprocess.run(
-            [
-                "git",
-                "clone",
-                "--depth", "1",
-                "--",
-                clone_url,
-                str(repo_folder)
-            ],
-            check=True,
-            capture_output=True,
-            text=True,
-            timeout=180
-        )
-
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Repository cloning timed out.")
-
-    except subprocess.CalledProcessError as e:
-        error = e.stderr.strip() if e.stderr else "Unknown Git error."
-        raise RuntimeError(f"GitHub clone failed: {error}")
-
-    except FileNotFoundError:
-        raise RuntimeError(
-            "Git is not installed or is not available in your system PATH."
-        )
 
 
 # ---------------- REPOSITORY FILE DISCOVERY ----------------

@@ -12,7 +12,6 @@ import {
   CheckCircle2,
   XCircle,
   FileCode2,
-  Upload,
   Search,
   ChevronDown,
   ExternalLink,
@@ -38,6 +37,7 @@ import type {
 import { api, errorMessage } from '../../services/api'
 import DependenciesPanel from './DependenciesPanel'
 import MarkdownContent from './MarkdownContent'
+import ImportPanel from '../import/ImportPanel'
 import { describeAnalysis } from '../../lib/analysis'
 
 interface WorkspacePanelProps {
@@ -50,8 +50,9 @@ interface WorkspacePanelProps {
   onRunAnalysis: () => void
   analyzing: boolean
   onRefresh: () => void
-  onImportZip: (file: File) => Promise<void>
-  onImportGitHub: (url: string) => Promise<void>
+  onImportZip: (file: File) => Promise<boolean | void>
+  onImportGitHub: (url: string) => Promise<boolean | void>
+  importing?: boolean
   selectedLine: number | null
   onOpenFinding: (path: string, line: number | null) => void
 }
@@ -291,10 +292,10 @@ export default function WorkspacePanel({
   onRefresh,
   onImportZip,
   onImportGitHub,
+  importing = false,
   selectedLine,
   onOpenFinding,
 }: WorkspacePanelProps) {
-  const zipInputRef = useRef<HTMLInputElement>(null)
   const selectedLineRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -306,8 +307,6 @@ export default function WorkspacePanel({
     } 
   }, [activeSection, selectedLine, selectedFileContent])
 
-  const [githubUrl, setGithubUrl] = useState('')
-  const [showGithubInput, setShowGithubInput] = useState(false)
   const [findingSearch, setFindingSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('All')
   const [analyzerFilter, setAnalyzerFilter] = useState('All')
@@ -381,14 +380,6 @@ export default function WorkspacePanel({
     explanationState && explanationState.key === fileKey ? explanationState : null
   const fileExplanation = currentExplanation?.text ?? null
   const explainingFile = fileKey !== null && explainingKey === fileKey
-
-  const handleGitHubImport = async () => {
-    if (!githubUrl.trim()) return
-
-    await onImportGitHub(githubUrl.trim())
-    setGithubUrl('')
-    setShowGithubInput(false)
-  }
 
   const handleExplainFile = async () => {
     if (!repositoryId || !selectedFilePath || !fileKey) return
@@ -522,76 +513,11 @@ const filteredFindings = findings.filter((finding) => {
                     understand your codebase with AI.
                 </p>
 
-                <input
-                    ref={zipInputRef}
-                    type="file"
-                    accept=".zip,application/zip,application/x-zip-compressed"
-                    hidden
-                    onChange={async (event) => {
-                    const file = event.target.files?.[0]
-
-                    if (file) {
-                        await onImportZip(file)
-                    }
-
-                    event.target.value = ''
-                    }}
+                <ImportPanel
+                    importing={importing}
+                    onImportLink={onImportGitHub}
+                    onImportZip={onImportZip}
                 />
-
-                <div className="welcome-actions">
-                    <button
-                    className="secondary-button"
-                    onClick={() => zipInputRef.current?.click()}
-                    >
-                    <Upload size={16} />
-                    Upload ZIP Repository
-                    </button>
-
-                    <button
-                        className="secondary-button"
-                        onClick={() => setShowGithubInput(!showGithubInput)}
-                        >
-                        <Code2 size={16} />
-                        Import from GitHub
-                    </button>
-                </div>
-
-                <span className="welcome-note">
-                    Supports ZIP archives and public GitHub repositories
-                    {showGithubInput && (
-                    <div className="github-inline-form">
-                        <input
-                        type="url"
-                        value={githubUrl}
-                        onChange={(event) => setGithubUrl(event.target.value)}
-                        onKeyDown={(event) => {
-                            if (event.key === 'Enter') {
-                            void handleGitHubImport()
-                            }
-                        }}
-                        placeholder="https://github.com/owner/repository"
-                        />
-
-                        <button
-                        className="primary-button"
-                        onClick={() => void handleGitHubImport()}
-                        disabled={!githubUrl.trim()}
-                        >
-                        Import Repository
-                        </button>
-
-                        <button
-                        className="secondary-button"
-                        onClick={() => {
-                            setShowGithubInput(false)
-                            setGithubUrl('')
-                        }}
-                        >
-                        Cancel
-                        </button>
-                    </div>
-                    )}
-                </span>
                 </div>
             </section>
             ) : isOverview ? (

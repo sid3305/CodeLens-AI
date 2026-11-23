@@ -8,6 +8,7 @@ import type {
   ExternalDependency,
   Repository,
   RepositoryFilesResponse,
+  RepositoryLinkPreview,
   SummaryResponse,
 } from '../types'
 
@@ -68,6 +69,15 @@ export const api = {
       body: formData,
     })
   },
+
+  /** Validate and normalise a repository link without importing it. */
+  parseRepositoryLink: (repoUrl: string, signal?: AbortSignal) =>
+    request<RepositoryLinkPreview>('/repositories/github/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ repo_url: repoUrl }),
+      signal,
+    }),
 
   importGitHub: (repoUrl: string) =>
     request<Repository>('/repositories/github', {

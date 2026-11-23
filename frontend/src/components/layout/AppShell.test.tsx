@@ -163,3 +163,56 @@ describe('AppShell API status (A3 / BUG-18)', () => {
     expect(await screen.findByText(/api connected/i)).toBeInTheDocument()
   })
 })
+
+describe('AppShell link import focus (X1)', () => {
+  const imported = {
+    id: 'g1', name: 'repo', source: 'github', file_count: 2, created_at: '',
+    ref: 'main', focus_path: 'src', source_url: 'https://github.com/o/r/tree/main/src',
+  }
+
+  beforeEach(() => {
+    mockedApi.health.mockResolvedValue({ status: 'healthy' })
+    mockedApi.getRepositories.mockResolvedValue([])
+    mockedApi.getAnalysisResults.mockRejectedValue(new Error('none'))
+    mockedApi.parseRepositoryLink = vi.fn().mockResolvedValue({
+      host: 'github.com', owner: 'o', repo: 'r', ref: 'main', ref_kind: 'branch',
+      focus_path: 'src', display: 'o/r @ main (src)', url: 'https://github.com/o/r/tree/main/src',
+    })
+    mockedApi.getFiles.mockResolvedValue({
+      repository_id: 'g1', total_files: 2,
+      files: [
+        { path: 'README.md', name: 'README.md', extension: '.md' },
+        { path: 'src/app.py', name: 'app.py', extension: '.py' },
+      ],
+    })
+  })
+
+  async function importLink(focus: string) {
+    mockedApi.importGitHub = vi.fn().mockImplementation(async () => {
+      mockedApi.getRepositories.mockResolvedValue([{ ...imported, focus_path: focus }])
+      return { ...imported, focus_path: focus }
+    })
+    const user = userEvent.setup()
+    render(<AppShell />)
+    const input = await screen.findByLabelText(/repository link/i)
+    await user.type(input, 'https://github.com/o/r/tree/main/src')
+    await screen.findByText(/will import/i)
+    await user.click(screen.getByRole('button', { name: /^import$/i }))
+  }
+
+  it('opens the explorer on the folder the link pointed at', async () => {
+    await importLink('src')
+
+    expect(await screen.findByRole('button', { name: 'app.py' })).toBeInTheDocument()
+  })
+
+  it('opens the file the link pointed at', async () => {
+    mockedApi.getFileContent = vi.fn().mockResolvedValue({
+      repository_id: 'g1', path: 'src/app.py', content: 'print("focused")',
+    })
+
+    await importLink('src/app.py')
+
+    expect(await screen.findByText('print("focused")')).toBeInTheDocument()
+  })
+})
