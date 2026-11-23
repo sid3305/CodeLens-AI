@@ -41,6 +41,20 @@ async def get_dependencies_analysis(
     return dependency_service.view_with_limit(report, max_nodes)
 
 
+@router.get("/{repo_id}/dependencies/cached", response_model=DependenciesAnalysisResponse | None)
+def get_cached_dependencies(
+    repo_id: str,
+    max_nodes: int = Query(200, ge=50, le=500, description="Max nodes in each graph"),
+):
+    """The saved analysis, or null if it was never computed (start a job, B3). Never computes."""
+
+    try:
+        report = dependency_service.get_cached_report(repo_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    return None if report is None else dependency_service.view_with_limit(report, max_nodes)
+
+
 @router.get("/{repo_id}/dependencies/circular")
 async def get_circular_dependencies(repo_id: str):
     """Only circular import dependencies."""

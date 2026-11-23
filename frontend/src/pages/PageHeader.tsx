@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react'
 import { Zap } from 'lucide-react'
 
-import { useRunAnalysis } from '../data/hooks'
-import { describeAnalysis } from '../lib/analysis'
-import { errorMessage } from '../services/api'
+import { useActiveJob, useStartJob } from '../data/jobs'
+import { api, errorMessage } from '../services/api'
+import JobProgress from '../components/jobs/JobProgress'
 import { Button, useToast } from '../components/ui'
 
 /** The page's single H1, its description and page actions. */
@@ -27,26 +27,26 @@ export function PageHeader({
   )
 }
 
+/** Starts an analysis job, or shows the running one (also after a refresh). */
 export function RunAnalysisButton({ repoId }: { repoId: string }) {
   const { notify } = useToast()
-  const run = useRunAnalysis(repoId)
+  const active = useActiveJob('analysis', repoId)
+  const start = useStartJob(api.startAnalysisJob)
+
+  if (active) return <JobProgress job={active} label="Analysis" className="w-full sm:w-80" />
 
   return (
     <Button
       variant="primary"
       icon={<Zap size={15} aria-hidden="true" />}
-      loading={run.isPending}
+      loading={start.isPending}
       onClick={() =>
-        run.mutate(undefined, {
-          onSuccess: (result) => {
-            const outcome = describeAnalysis(result)
-            notify(outcome.tone, outcome.message)
-          },
-          onError: (error) => notify('error', errorMessage(error, 'Analysis failed.')),
+        start.mutate(repoId, {
+          onError: (error) => notify('error', errorMessage(error, 'Could not start the analysis.')),
         })
       }
     >
-      {run.isPending ? 'Analyzing…' : 'Run analysis'}
+      Run analysis
     </Button>
   )
 }

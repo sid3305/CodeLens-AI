@@ -10,7 +10,14 @@ from utils.analysis_engine import run_all_analyzers
 from utils.config import get_upload_dir
 from utils.security import redact_secrets
 
-_analysis_lock = Lock()
+# One analysis at a time per repository; different repositories run in parallel.
+_locks: dict[str, Lock] = {}
+_locks_guard = Lock()
+
+
+def lock_for(repo_id):
+    with _locks_guard:
+        return _locks.setdefault(repo_id, Lock())
 
 def _sanitize_finding_data(value):
     """Redact secrets recursively from finding data."""
@@ -114,21 +121,24 @@ def _overall_status(tool_status):
     return "failed"
 
 
-def analyze_repository(repo_id):
-    """Run all existing analyzers against a repository."""
+def analyze_repository(repo_id, *, on_progress=None):
+    """
+    Run all analyzers against a repository and save the results.
+    ``on_progress(index, total, tool)`` is called before each analyzer and
+    may raise to stop the run; nothing is saved then.
+    """
 
     repository = get_repository(repo_id)
     repo_path = Path(repository["path"]).resolve()
 
     results_path = _results_file(repo_id)
 
-    # Prevent simultaneous analysis runs for different repositories
-    # from being blocked by holding a global lock during scanning.
-    if not _analysis_lock.acquire(blocking=False):
-        raise RuntimeError("Another repository analysis is currently running.")
+    lock = lock_for(repo_id)
+    if not lock.acquire(blocking=False):
+        raise RuntimeError("An analysis of this repository is currently running.")
 
     try:
-        result = run_all_analyzers(str(repo_path))
+        result = run_all_analyzers(str(repo_path), on_progress=on_progress)
 
         findings = _make_relative_paths(
             result["findings"],
@@ -161,7 +171,7 @@ def analyze_repository(repo_id):
         return response
 
     finally:
-        _analysis_lock.release()
+        lock.release()
 
 
 def get_analysis_results(repo_id):
@@ -172,7 +182,8 @@ def get_analysis_results(repo_id):
     results_path = _results_file(repo_id)
 
     if not results_path.exists():
-        raise ValueError("No analysis results found. Run an analysis first.")
+        # Not an error: no analysis was run yet.
+        return None
 
     try:
         with results_path.open("r", encoding="utf-8") as file:

@@ -17,10 +17,11 @@ vi.mock('../services/api', async (importOriginal) => {
       getFiles: vi.fn(),
       getAnalysisResults: vi.fn(),
       getSummary: vi.fn(),
+      listActiveJobs: vi.fn(async () => []),
       getAiConsent: vi.fn(async (id: string) => ({ repository_id: id, enabled: true, provider: 'Groq', model: 'test-model', configured: true, problem: null })),
       setAiConsent: vi.fn(),
       getFileContent: vi.fn(),
-      getDependenciesAnalysis: vi.fn(),
+      getCachedDependencies: vi.fn(),
     },
   }
 })
@@ -60,7 +61,7 @@ beforeEach(() => {
   mockedApi.getAnalysisResults.mockResolvedValue(analysis)
   mockedApi.getSummary.mockResolvedValue(null)
   mockedApi.getFileContent.mockImplementation(async (id: string, path: string) => ({ repository_id: id, path, content: 'x = 1\ny = 2\n' }))
-  mockedApi.getDependenciesAnalysis.mockResolvedValue({
+  mockedApi.getCachedDependencies.mockResolvedValue({
     repository_id: 'r1', total_internal_modules: 2, total_external_dependencies: 0, circular_dependencies: [],
     module_dependencies: [], external_dependencies: [], stdlib_imports: [], analyzed_files: ['src/a.py', 'setup.py'],
     unresolved_imports: [], skipped_files: [],

@@ -1,5 +1,6 @@
 import type {
   AiConsent,
+  Job,
   AnalysisResponse,
   DependenciesAnalysisResponse,
   ExplainResponse,
@@ -47,14 +48,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return response.json() as Promise<T>
 }
 
-/** A GET that resolves to null on 404 ("nothing there yet"). */
-async function optional<T>(endpoint: string, signal?: AbortSignal): Promise<T | null> {
-  try {
-    return await request<T>(endpoint, { signal })
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) return null
-    throw error
-  }
+function postJson<T>(endpoint: string, body: unknown): Promise<T> {
+  return request<T>(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
 }
 
 const repo = (repoId: string) => `/repositories/${encodeURIComponent(repoId)}`
@@ -100,9 +99,37 @@ export const api = {
 
   /** Latest saved analysis, or null if none has been run. */
   getAnalysisResults: (repoId: string, signal?: AbortSignal) =>
-    optional<AnalysisResponse>(`${repo(repoId)}/results`, signal),
+    // null (200) until an analysis was run; 404 only for an unknown repository.
+    request<AnalysisResponse | null>(`${repo(repoId)}/results`, { signal }),
 
   /** Previously generated summary, or null. Never calls the LLM. */
+  // --- Background jobs (B3) ---
+
+  listActiveJobs: (signal?: AbortSignal) => request<Job[]>('/jobs?active=true', { signal }),
+
+  getJob: (jobId: string, signal?: AbortSignal) =>
+    request<Job>(`/jobs/${encodeURIComponent(jobId)}`, { signal }),
+
+  cancelJob: (jobId: string) =>
+    request<Job>(`/jobs/${encodeURIComponent(jobId)}/cancel`, { method: 'POST' }),
+
+  startAnalysisJob: (repoId: string) => postJson<Job>('/jobs/analysis', { repository_id: repoId }),
+
+  startDependenciesJob: (repoId: string, refresh = false) =>
+    postJson<Job>('/jobs/dependencies', { repository_id: repoId, refresh }),
+
+  startLinkImportJob: (url: string) => postJson<Job>('/jobs/import/link', { repo_url: url }),
+
+  startZipImportJob: (file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    return request<Job>('/jobs/import/zip', { method: 'POST', body })
+  },
+
+  /** The saved dependency report, or null if never computed (start a job). */
+  getCachedDependencies: (repoId: string, signal?: AbortSignal) =>
+    request<DependenciesAnalysisResponse | null>(`${repo(repoId)}/dependencies/cached`, { signal }),
+
   getAiConsent: (repoId: string, signal?: AbortSignal) =>
     request<AiConsent>(`${repo(repoId)}/ai-consent`, { signal }),
 

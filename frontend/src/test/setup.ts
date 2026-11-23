@@ -6,6 +6,15 @@ import { cleanup, configure } from '@testing-library/react'
 // take longer than the 1 s default.
 configure({ asyncUtilTimeout: 5000 })
 
+// Never import application modules here: they would load before each test
+// file's vi.mock() and keep the real API client (real network calls).
+
+// No test may reach a real server: an unmocked request fails loudly.
+// (Tests that exercise the client itself stub fetch with vi.stubGlobal.)
+globalThis.fetch = (input: RequestInfo | URL) => {
+  throw new Error(`Unmocked network request in a test: ${String(input)}`)
+}
+
 afterEach(() => {
   cleanup()
 })

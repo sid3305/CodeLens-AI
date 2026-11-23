@@ -1,9 +1,11 @@
 import { ChevronDown, FileWarning, Files, GitMerge, Package, RefreshCw, Zap } from 'lucide-react'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 
-import { useAnalysis, useDependencies, useRefreshDependencies, useRepositoryFiles } from '../data/hooks'
-import { errorMessage } from '../services/api'
+import { useAnalysis, useDependencies, useRepositoryFiles } from '../data/hooks'
+import { useActiveJob, useStartJob } from '../data/jobs'
+import JobProgress from '../components/jobs/JobProgress'
+import { api, errorMessage } from '../services/api'
 import type { DependenciesAnalysisResponse, Repository } from '../types'
 import {
   CyclesTab,
@@ -117,10 +119,20 @@ export default function ArchitecturePage({
   const filePaths = useMemo(() => files.data?.map((file) => file.path), [files.data])
   const noFindings = useMemo(() => [], [])
   const dependencies = useDependencies(repository.id)
-  const refresh = useRefreshDependencies(repository.id)
+  const job = useActiveJob('dependencies', repository.id)
+  const start = useStartJob((refresh: boolean) => api.startDependenciesJob(repository.id, refresh))
 
   const analysis = dependencies.data
-  const error = refresh.error ?? dependencies.error
+  const error = start.error ?? dependencies.error
+  const busy = job !== null || start.isPending
+
+  // Never computed: compute it now, as a background job (the backend reuses
+  // a running one, so a second mount cannot start another).
+  const notComputed = dependencies.isSuccess && dependencies.data === null
+  const { mutate } = start
+  useEffect(() => {
+    if (notComputed) mutate(false)
+  }, [notComputed, mutate])
 
   return (
     <OpenFileContext.Provider value={onOpenFile}>
@@ -131,22 +143,24 @@ export default function ArchitecturePage({
           actions={
             <IconButton
               aria-label="Refresh dependency analysis"
-              icon={<RefreshCw size={16} className={refresh.isPending || dependencies.isFetching ? 'animate-spin' : undefined} />}
-              disabled={refresh.isPending || dependencies.isFetching}
-              onClick={() => refresh.mutate()}
+              icon={<RefreshCw size={16} className={busy ? 'animate-spin' : undefined} />}
+              disabled={busy}
+              onClick={() => start.mutate(true)}
             />
           }
         />
 
+        {job && <JobProgress job={job} label="Dependency analysis" className="mb-4" />}
+
         {error && (
           <div className="mb-4 flex flex-wrap items-center gap-2">
             <InlineMessage tone="error">{errorMessage(error, 'Failed to load dependencies')}</InlineMessage>
-            <Button size="sm" onClick={() => refresh.mutate()}>Retry</Button>
+            <Button size="sm" onClick={() => start.mutate(true)}>Retry</Button>
           </div>
         )}
 
         {!analysis ? (
-          dependencies.isPending && <LoadingBlock label="Analyzing dependencies" lines={4} />
+          (dependencies.isPending || busy) && <LoadingBlock label="Analyzing dependencies" lines={4} />
         ) : (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">

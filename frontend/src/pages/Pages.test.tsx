@@ -16,6 +16,7 @@ vi.mock('../services/api', async (importOriginal) => {
       getFiles: vi.fn(),
       getAnalysisResults: vi.fn(),
       getSummary: vi.fn(),
+      listActiveJobs: vi.fn(async () => []),
       getAiConsent: vi.fn(async (id: string) => ({ repository_id: id, enabled: true, provider: 'Groq', model: 'test-model', configured: true, problem: null })),
       setAiConsent: vi.fn(),
       generateSummary: vi.fn(),

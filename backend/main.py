@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.routers import ai, analysis, dependencies, repositories
+from backend.routers import ai, analysis, dependencies, jobs, repositories
 from backend.services.repository_service import sweep_orphan_workspaces
 
 logger = logging.getLogger("codelens")
@@ -65,6 +65,7 @@ app.include_router(repositories.router)
 app.include_router(analysis.router)
 app.include_router(ai.router)
 app.include_router(dependencies.router)
+app.include_router(jobs.router)
 
 
 @app.get("/")

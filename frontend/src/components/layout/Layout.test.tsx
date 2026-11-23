@@ -16,9 +16,10 @@ vi.mock('../../services/api', async (importOriginal) => {
       getFiles: vi.fn(),
       getAnalysisResults: vi.fn(),
       getSummary: vi.fn(),
+      listActiveJobs: vi.fn(async () => []),
       getAiConsent: vi.fn(async (id: string) => ({ repository_id: id, enabled: true, provider: 'Groq', model: 'test-model', configured: true, problem: null })),
       setAiConsent: vi.fn(),
-      getDependenciesAnalysis: vi.fn(),
+      getCachedDependencies: vi.fn(),
     },
   }
 })
@@ -49,7 +50,7 @@ beforeEach(() => {
   }))
   mockedApi.getAnalysisResults.mockRejectedValue(new Error('none'))
   mockedApi.getSummary.mockResolvedValue(null)
-  mockedApi.getDependenciesAnalysis.mockReturnValue(new Promise(() => {}))
+  mockedApi.getCachedDependencies.mockReturnValue(new Promise(() => {}))
 })
 
 afterEach(() => {

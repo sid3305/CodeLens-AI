@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../test/render'
+import { fakeJobServer } from '../test/jobs'
 
 import ArchitecturePage from './ArchitecturePage'
 import { api } from '../services/api'
@@ -14,7 +15,8 @@ vi.mock('../services/api', async (importOriginal) => {
   return {
     ...original,
     api: {
-      getDependenciesAnalysis: vi.fn(),
+      getCachedDependencies: vi.fn(),
+      listActiveJobs: vi.fn(async () => []),
       getFiles: vi.fn(async (id: string) => ({ repository_id: id, total_files: 0, files: [] })),
       getAnalysisResults: vi.fn(async () => null),
     },
@@ -56,8 +58,8 @@ const analysis: DependenciesAnalysisResponse = {
 }
 
 beforeEach(() => {
-  mockedApi.getDependenciesAnalysis.mockReset()
-  mockedApi.getDependenciesAnalysis.mockResolvedValue(structuredClone(analysis))
+  mockedApi.getCachedDependencies.mockReset()
+  mockedApi.getCachedDependencies.mockResolvedValue(structuredClone(analysis))
 })
 
 const repository: Repository = { id: 'r', name: 'repo', source: 'zip', file_count: 2, created_at: '' }
@@ -91,39 +93,40 @@ describe('ArchitecturePage fetching (D5 / BUG-22)', () => {
     rerender(page({ ...repository }))
     await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(1)
+    expect(mockedApi.getCachedDependencies).toHaveBeenCalledTimes(1)
   })
 
-  it('re-runs the analysis exactly once when refresh is clicked', async () => {
+  it('refresh starts one recompute job; the first load never recomputes (B2, B3)', async () => {
+    fakeJobServer(mockedApi)
     const user = userEvent.setup()
     renderWithProviders(page())
     await screen.findByRole('tab', { name: /external/i })
+    expect(mockedApi.startDependenciesJob).not.toHaveBeenCalled()
 
     await user.click(screen.getByRole('button', { name: /refresh dependency analysis/i }))
-    await waitFor(() => expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(2))
-    await new Promise((resolve) => setTimeout(resolve, 20))
 
-    expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(mockedApi.startDependenciesJob).toHaveBeenCalledWith('r', true))
+    expect(await screen.findByRole('progressbar', { name: 'Dependency analysis' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /refresh dependency analysis/i })).toBeDisabled()
+    expect(mockedApi.startDependenciesJob).toHaveBeenCalledTimes(1)
   })
 
-  it('asks the backend to recompute on refresh, not on first load (B2)', async () => {
-    const user = userEvent.setup()
+  it('computes a never-analysed repository in a background job (B3)', async () => {
+    const server = fakeJobServer(mockedApi)
+    mockedApi.getCachedDependencies.mockResolvedValue(null)
     renderWithProviders(page())
-    await screen.findByRole('tab', { name: /external/i })
 
-    const [firstId, firstOptions] = mockedApi.getDependenciesAnalysis.mock.calls[0]
-    expect(firstId).toBe('r')
-    expect(firstOptions.refresh).toBeUndefined()
-
-    await user.click(screen.getByRole('button', { name: /refresh dependency analysis/i }))
-    await waitFor(() =>
-      expect(mockedApi.getDependenciesAnalysis).toHaveBeenLastCalledWith('r', { refresh: true }),
-    )
+    await waitFor(() => expect(mockedApi.startDependenciesJob).toHaveBeenCalledWith('r', false))
+    server.progress(server.latest('dependencies').id, null, 'Resolving imports')
+    const progress = await screen.findByRole('progressbar', { name: 'Dependency analysis' })
+    await waitFor(() => expect(progress).toHaveAttribute('aria-valuetext', 'Resolving imports'))
+    expect(screen.getByText('Analyzing dependencies')).toBeInTheDocument()
+    expect(mockedApi.startDependenciesJob).toHaveBeenCalledTimes(1)
   })
 
   it('never shows one repository’s analysis for another', async () => {
     const other: Repository = { ...repository, id: 'other', name: 'other' }
-    mockedApi.getDependenciesAnalysis.mockImplementation((id: string) =>
+    mockedApi.getCachedDependencies.mockImplementation((id: string) =>
       id === 'r' ? Promise.resolve(structuredClone(analysis)) : new Promise(() => {}),
     )
     const { rerender } = renderWithProviders(page())
@@ -205,7 +208,7 @@ describe('ArchitecturePage unresolved imports and skipped files (C4)', () => {
   })
 
   it('says so when everything was resolved and parsed', async () => {
-    mockedApi.getDependenciesAnalysis.mockResolvedValue({
+    mockedApi.getCachedDependencies.mockResolvedValue({
       ...structuredClone(analysis),
       unresolved_imports: [],
       skipped_files: [],

@@ -7,11 +7,13 @@ from utils.ruff_analyzer import run_ruff_analysis
 from utils.semgrep_analyzer import run_semgrep_analysis
 
 
-def run_all_analyzers(target_path):
+def run_all_analyzers(target_path, *, on_progress=None):
     """
     Execute all analyzers, normalize findings and consolidate duplicates.
 
-    A failure in one analyzer will not stop the others.
+    A failure in one analyzer will not stop the others. ``on_progress``
+    (index, total, tool name) is called before each analyzer; it may raise
+    to stop the run (job cancellation).
     """
 
     analyzers = {
@@ -24,7 +26,10 @@ def run_all_analyzers(target_path):
     raw_findings = []
     tool_status = {}
 
-    for tool_name, analyzer in analyzers.items():
+    for index, (tool_name, analyzer) in enumerate(analyzers.items()):
+
+        if on_progress:
+            on_progress(index, len(analyzers), tool_name)
 
         try:
             findings = analyzer(target_path)

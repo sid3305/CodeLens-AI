@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../services/api'
-import type { AiConsent, AnalysisResponse, ExplainResponse, Repository, SummaryResponse } from '../types'
+import type { AiConsent, ExplainResponse, Repository, SummaryResponse } from '../types'
 import { queryKeys } from './queryClient'
 
 const HEALTH_INTERVAL_MS = 30_000
@@ -72,10 +72,14 @@ export function useStoredExplanation(repoId: string, path: string) {
   })
 }
 
+/**
+ * The saved dependency report, or null if it was never computed. Computing
+ * runs as a background job (B3); the job watcher refetches this when done.
+ */
 export function useDependencies(repoId: string) {
   return useQuery({
     queryKey: queryKeys.dependencies(repoId),
-    queryFn: ({ signal }) => api.getDependenciesAnalysis(repoId, { signal }),
+    queryFn: ({ signal }) => api.getCachedDependencies(repoId, signal),
   })
 }
 
@@ -108,14 +112,6 @@ export function useSetAiConsent(repoId: string) {
   })
 }
 
-export function useRunAnalysis(repoId: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: () => api.analyzeRepository(repoId),
-    onSuccess: (result: AnalysisResponse) => client.setQueryData(queryKeys.analysis(repoId), result),
-  })
-}
-
 /** Sends repository code to the LLM. Never retried. */
 export function useGenerateSummary(repoId: string) {
   const client = useQueryClient()
@@ -136,30 +132,6 @@ export function useExplainFile(repoId: string) {
     mutationFn: (path: string) => api.explainFile(repoId, path),
     retry: false,
     onSuccess: (explanation, path) => client.setQueryData(queryKeys.explanation(repoId, path), explanation),
-  })
-}
-
-export function useRefreshDependencies(repoId: string) {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: () => api.getDependenciesAnalysis(repoId, { refresh: true }),
-    onSuccess: (data) => client.setQueryData(queryKeys.dependencies(repoId), data),
-  })
-}
-
-export function useImportZip() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (file: File) => api.uploadRepository(file),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.repositories }),
-  })
-}
-
-export function useImportLink() {
-  const client = useQueryClient()
-  return useMutation({
-    mutationFn: (url: string) => api.importGitHub(url),
-    onSuccess: () => client.invalidateQueries({ queryKey: queryKeys.repositories }),
   })
 }
 

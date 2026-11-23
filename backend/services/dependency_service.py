@@ -175,6 +175,19 @@ def get_dependency_report(repo_id: str, *, refresh: bool = False) -> dict[str, A
         return report
 
 
+def get_cached_report(repo_id: str) -> dict[str, Any] | None:
+    """The saved report, or None when it was never computed (never computes)."""
+
+    get_repository(repo_id)
+    with _locks_guard:
+        cached = _memory.get(repo_id)
+    if cached is None:
+        cached = _read_cache(_cache_path(repo_id))
+        if cached is not None:
+            _remember(repo_id, cached)
+    return cached
+
+
 def _remember(repo_id: str, report: dict[str, Any]) -> None:
     with _locks_guard:
         _memory[repo_id] = report

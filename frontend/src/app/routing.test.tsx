@@ -18,10 +18,11 @@ vi.mock('../services/api', async (importOriginal) => {
       getFiles: vi.fn(),
       getAnalysisResults: vi.fn(),
       getSummary: vi.fn(),
+      listActiveJobs: vi.fn(async () => []),
       getAiConsent: vi.fn(async (id: string) => ({ repository_id: id, enabled: true, provider: 'Groq', model: 'test-model', configured: true, problem: null })),
       setAiConsent: vi.fn(),
       getFileContent: vi.fn(),
-      getDependenciesAnalysis: vi.fn(),
+      getCachedDependencies: vi.fn(),
     },
   }
 })
@@ -101,7 +102,7 @@ beforeEach(() => {
   mockedApi.getFileContent.mockImplementation(async (id: string, path: string) => ({
     repository_id: id, path, content: `first line of ${path}\nsecond line\nthird line`,
   }))
-  mockedApi.getDependenciesAnalysis.mockResolvedValue(dependencies)
+  mockedApi.getCachedDependencies.mockResolvedValue(dependencies)
 })
 
 describe('path helpers (C3)', () => {

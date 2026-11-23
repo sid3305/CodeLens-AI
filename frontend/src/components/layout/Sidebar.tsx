@@ -36,6 +36,8 @@ interface SidebarProps {
 
   onImportZip: (file: File) => Promise<boolean | void>
   onImportGitHub: (url: string) => Promise<boolean | void>
+  /** Running imports (B3), shown under the import button. */
+  activity?: ReactNode
   /** Folder or file to reveal in the explorer (from a link import). */
   explorerFocusPath?: string | null
   onDeleteRepository: (repository: Repository) => void
@@ -65,6 +67,7 @@ export default function Sidebar({
   onSelectFile,
   onImportZip,
   onImportGitHub,
+  activity,
   onDeleteRepository,
   importing,
   loading,
@@ -232,6 +235,8 @@ export default function Sidebar({
             >
               Import repository
             </Button>
+
+            {activity && <div className="space-y-2 px-2">{activity}</div>}
 
             {importOpen && (
               <div className="px-1">

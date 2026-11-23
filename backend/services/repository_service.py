@@ -145,8 +145,11 @@ def _detect_project_root(extract_path):
     return extract_path
 
 
-async def import_zip_repository(upload: UploadFile):
-    """Import and extract a ZIP repository."""
+async def receive_zip_upload(upload: UploadFile) -> Path:
+    """
+    Validate and store an uploaded ZIP in a new workspace; returns the
+    archive path. Extraction is separate so it can run as a job (B3).
+    """
 
     if not upload.filename or Path(upload.filename).suffix.lower() != ".zip":
         raise ValueError("Please upload a valid ZIP archive.")
@@ -164,21 +167,7 @@ async def import_zip_repository(upload: UploadFile):
 
         archive_path = workspace / "repository_upload.zip"
         archive_path.write_bytes(archive_content)
-
-        extracted_path = Path(extract_zip(str(archive_path)))
-
-        repo_path = _detect_project_root(extracted_path)
-
-        repository_name = repo_path.name
-
-        archive_path.unlink(missing_ok=True)
-
-        return _register_repository(
-            repo_id=workspace.name,
-            name=repository_name,
-            source="zip",
-            repo_path=repo_path,
-        )
+        return archive_path
 
     except Exception:
         remove_tree(workspace)
@@ -188,8 +177,43 @@ async def import_zip_repository(upload: UploadFile):
         await upload.close()
 
 
-def import_github_repository(repo_url):
-    """Clone and register a GitHub repository."""
+def register_zip_archive(archive_path: Path, *, check=None):
+    """Extract a stored upload and register it; removes the workspace on failure or cancel."""
+
+    archive_path = Path(archive_path)
+    workspace = archive_path.parent
+
+    try:
+        if check:
+            check()
+        extracted_path = Path(extract_zip(str(archive_path)))
+        if check:
+            check()
+
+        repo_path = _detect_project_root(extracted_path)
+
+        archive_path.unlink(missing_ok=True)
+
+        return _register_repository(
+            repo_id=workspace.name,
+            name=repo_path.name,
+            source="zip",
+            repo_path=repo_path,
+        )
+
+    except BaseException:
+        remove_tree(workspace)
+        raise
+
+
+async def import_zip_repository(upload: UploadFile):
+    """Import and extract a ZIP repository."""
+
+    return register_zip_archive(await receive_zip_upload(upload))
+
+
+def import_github_repository(repo_url, *, check=None):
+    """Clone and register a GitHub repository. ``check`` may raise to cancel after cloning."""
 
     cloned = clone_github_repo(repo_url)
     repo_path = Path(cloned.path).resolve()
@@ -197,6 +221,8 @@ def import_github_repository(repo_url):
     source = cloned.source
 
     try:
+        if check:
+            check()
         return _register_repository(
             repo_id=workspace.name,
             name=source.repo,
@@ -207,7 +233,7 @@ def import_github_repository(repo_url):
             source_url=source.url,
         )
 
-    except Exception:
+    except BaseException:
         remove_tree(workspace)
         raise
 

@@ -40,14 +40,6 @@ def stub_analyzers(monkeypatch, upload_root):
     monkeypatch.setattr(analysis_engine, "run_gitleaks_analysis", lambda _p: [])
 
 
-def test_results_are_404_before_any_analysis(client):
-    repo = upload_repo(client, FILES)
-
-    response = client.get(f"/api/repositories/{repo['id']}/results")
-
-    assert response.status_code == 404
-
-
 def test_analysis_is_persisted_with_relative_paths(client, stub_analyzers, upload_root):
     repo = upload_repo(client, FILES)
 
@@ -73,11 +65,13 @@ def test_secrets_in_findings_are_redacted(client, stub_analyzers):
 def test_concurrent_analysis_is_rejected(client, stub_analyzers):
     repo = upload_repo(client, FILES)
 
-    assert analysis_service._analysis_lock.acquire(blocking=False)
+    # B3: the lock is per repository.
+    lock = analysis_service.lock_for(repo["id"])
+    assert lock.acquire(blocking=False)
     try:
         response = client.post(f"/api/repositories/{repo['id']}/analyze")
     finally:
-        analysis_service._analysis_lock.release()
+        lock.release()
 
     assert response.status_code == 409
 
@@ -110,3 +104,12 @@ def test_unexpected_engine_errors_are_500(client, monkeypatch):
 
     assert response.status_code == 500
     assert "boom" not in response.text
+
+
+def test_no_results_yet_is_an_empty_200(client):
+    repo = upload_repo(client, FILES)
+
+    response = client.get(f"/api/repositories/{repo['id']}/results")
+
+    assert response.status_code == 200
+    assert response.json() is None

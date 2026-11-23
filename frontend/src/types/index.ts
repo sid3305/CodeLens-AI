@@ -35,6 +35,24 @@ export interface RepositoryLinkPreview {
   url: string
 }
 
+export type JobKind = 'import' | 'analysis' | 'dependencies'
+export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'
+
+/** B3: a background job; poll it until its status is final. */
+export interface Job<Result = unknown> {
+  id: string
+  kind: JobKind
+  repository_id: string | null
+  status: JobStatus
+  /** 0..1, or null when the step has no measurable progress. */
+  progress: number | null
+  message: string
+  result: Result | null
+  error: string | null
+  created_at: string
+  updated_at: string
+}
+
 /** B6: whether this repository's code may be sent to the AI provider, and who that is. */
 export interface AiConsent {
   repository_id: string

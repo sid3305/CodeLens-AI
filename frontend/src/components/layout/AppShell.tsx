@@ -13,14 +13,15 @@ import {
   useAnalysis,
   useDeleteRepository,
   useHealth,
-  useImportLink,
-  useImportZip,
   useRepositories,
   useRepositoryFiles,
 } from '../../data/hooks'
+import { useActiveJobs, useJobWatcher, useStartJob } from '../../data/jobs'
+import { describeAnalysis } from '../../lib/analysis'
+import JobProgress from '../jobs/JobProgress'
 import { queryKeys } from '../../data/queryClient'
 import { api, errorMessage } from '../../services/api'
-import type { Repository, WorkspaceSection } from '../../types'
+import type { AnalysisResponse, Job, Repository, WorkspaceSection } from '../../types'
 import { paths, sectionFromPath, type NavSection } from '../../app/paths'
 import type { ShellContext } from '../../app/shellContext'
 
@@ -65,9 +66,14 @@ export default function AppShell() {
 
   const [explorerFocus, setExplorerFocus] = useState<{ repoId: string; path: string } | null>(null)
 
-  const importZip = useImportZip()
-  const importLink = useImportLink()
+  // Imports, analyses and dependency analyses run as background jobs (B3).
+  const importZip = useStartJob(api.startZipImportJob)
+  const importLink = useStartJob(api.startLinkImportJob)
+  const activeJobs = useActiveJobs().data ?? []
+  const importJobs = activeJobs.filter((job) => job.kind === 'import')
   const importing = importZip.isPending || importLink.isPending
+  // Imports started in this tab open the new repository when they finish.
+  const [openWhenImported] = useState(() => new Set<string>())
   const deleteRepository = useDeleteRepository()
   const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null)
   const deleting = deleteRepository.isPending
@@ -102,9 +108,8 @@ export default function AppShell() {
 
   const handleImportZip = async (file: File) => {
     try {
-      const repository = await importZip.mutateAsync(file)
-      navigate(paths.section(repository.id, 'overview'))
-      notify('success', `${repository.name} imported successfully.`)
+      const job = await importZip.mutateAsync(file)
+      openWhenImported.add(job.id)
       return true
     } catch (err) {
       notify('error', errorMessage(err, 'ZIP import failed.'))
@@ -114,18 +119,40 @@ export default function AppShell() {
 
   const handleImportGitHub = async (repoUrl: string) => {
     try {
-      const repository = await importLink.mutateAsync(repoUrl)
-      notify(
-        'success',
-        `${repository.name}${repository.ref ? ` @ ${repository.ref}` : ''} imported successfully.`,
-      )
-      await openImported(repository.id, repository.focus_path)
+      const job = await importLink.mutateAsync(repoUrl)
+      openWhenImported.add(job.id)
       return true
     } catch (err) {
       notify('error', errorMessage(err, 'Import failed.'))
       return false
     }
   }
+
+  useJobWatcher((job: Job) => {
+    const repoId = job.repository_id
+    if (job.status === 'cancelled') {
+      notify('warning', `${job.kind === 'import' ? 'Import' : job.kind === 'analysis' ? 'Analysis' : 'Dependency analysis'} cancelled.`)
+      return
+    }
+    if (job.status === 'failed') {
+      notify('error', job.error ?? 'The job failed.')
+      return
+    }
+    if (job.kind === 'analysis' && repoId) {
+      const result = job.result as AnalysisResponse
+      queryClient.setQueryData(queryKeys.analysis(repoId), result)
+      const outcome = describeAnalysis(result)
+      notify(outcome.tone, outcome.message)
+    } else if (job.kind === 'dependencies' && repoId) {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.dependencies(repoId) })
+    } else if (job.kind === 'import') {
+      const repository = job.result as Repository
+      void queryClient.invalidateQueries({ queryKey: queryKeys.repositories }).then(() => {
+        notify('success', `${repository.name}${repository.ref ? ` @ ${repository.ref}` : ''} imported successfully.`)
+        if (openWhenImported.delete(job.id)) void openImported(repository.id, repository.focus_path)
+      })
+    }
+  })
 
   const handleConfirmDelete = () => {
     if (!deleteTarget) return
@@ -154,6 +181,10 @@ export default function AppShell() {
       }}
       onImportZip={handleImportZip}
       onImportGitHub={handleImportGitHub}
+      activity={
+        importJobs.length > 0 &&
+        importJobs.map((job) => <JobProgress key={job.id} job={job} label="Import" />)
+      }
       onDeleteRepository={(repository) => setDeleteTarget(repository)}
       importing={importing}
       loading={repositoriesQuery.isPending}
