@@ -39,3 +39,10 @@ describe('stylesheet integrity (A7 / BUG-12)', () => {
     expect(ruleBodies('.secondary-button')).toMatch(/display\s*:\s*inline-flex/)
   })
 })
+
+describe('inline errors (A3 follow-up)', () => {
+  it('stay red inside empty states, which restyle paragraphs', () => {
+    // .empty-content p (0,1,1) would otherwise override .inline-error (0,1,0).
+    expect(css).toMatch(/\.empty-content \.inline-error[^{]*\{[^}]*color\s*:\s*#b91c1c/)
+  })
+})

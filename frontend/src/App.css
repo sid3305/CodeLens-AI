@@ -2978,13 +2978,15 @@
 }
 
 /* Inline error text shown next to the action that failed. */
-.inline-error {
+.inline-error,
+.empty-content .inline-error {
   margin: 12px 0 0;
   color: #b91c1c;
   font-size: 13px;
 }
 
-[data-theme='dark'] .inline-error {
+[data-theme='dark'] .inline-error,
+[data-theme='dark'] .empty-content .inline-error {
   color: #fca5a5;
 }
 
