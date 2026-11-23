@@ -1,11 +1,7 @@
 import type {
   AnalysisResponse,
-  CircularDependency,
   DependenciesAnalysisResponse,
-  DependenciesGraphData,
-  DependenciesStats,
   ExplainResponse,
-  ExternalDependency,
   Repository,
   RepositoryFilesResponse,
   RepositoryLinkPreview,
@@ -31,10 +27,7 @@ export function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback
 }
 
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {},
-): Promise<T> {
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, options)
 
   if (!response.ok) {
@@ -53,123 +46,82 @@ async function request<T>(
   return response.json() as Promise<T>
 }
 
+/** A GET that resolves to null on 404 ("nothing there yet"). */
+async function optional<T>(endpoint: string, signal?: AbortSignal): Promise<T | null> {
+  try {
+    return await request<T>(endpoint, { signal })
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) return null
+    throw error
+  }
+}
+
+const repo = (repoId: string) => `/repositories/${encodeURIComponent(repoId)}`
+
+const json = (body: unknown): RequestInit => ({
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(body),
+})
+
 export const api = {
-  health: () =>
-    request<{ status: string }>('/health'),
+  health: (signal?: AbortSignal) => request<{ status: string }>('/health', { signal }),
 
-  getRepositories: () =>
-    request<Repository[]>('/repositories'),
+  getRepositories: (signal?: AbortSignal) => request<Repository[]>('/repositories', { signal }),
 
-  uploadRepository: async (file: File) => {
+  uploadRepository: (file: File) => {
     const formData = new FormData()
     formData.append('file', file)
-
-    return request<Repository>('/repositories/upload', {
-      method: 'POST',
-      body: formData,
-    })
+    return request<Repository>('/repositories/upload', { method: 'POST', body: formData })
   },
 
   /** Validate and normalise a repository link without importing it. */
   parseRepositoryLink: (repoUrl: string, signal?: AbortSignal) =>
-    request<RepositoryLinkPreview>('/repositories/github/parse', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: repoUrl }),
-      signal,
-    }),
+    request<RepositoryLinkPreview>('/repositories/github/parse', { ...json({ repo_url: repoUrl }), signal }),
 
   importGitHub: (repoUrl: string) =>
-    request<Repository>('/repositories/github', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ repo_url: repoUrl }),
-    }),
+    request<Repository>('/repositories/github', json({ repo_url: repoUrl })),
 
-  getFiles: (repoId: string) =>
-    request<RepositoryFilesResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/files`,
-    ),
+  deleteRepository: (repoId: string) =>
+    request<{ message: string; repository_id: string }>(repo(repoId), { method: 'DELETE' }),
 
-  getFileContent: (repoId: string, path: string) =>
+  getFiles: (repoId: string, signal?: AbortSignal) =>
+    request<RepositoryFilesResponse>(`${repo(repoId)}/files`, { signal }),
+
+  getFileContent: (repoId: string, path: string, signal?: AbortSignal) =>
     request<{ repository_id: string; path: string; content: string }>(
-      `/repositories/${encodeURIComponent(repoId)}/files/content?path=${encodeURIComponent(path)}`,
+      `${repo(repoId)}/files/content?path=${encodeURIComponent(path)}`,
+      { signal },
     ),
 
   analyzeRepository: (repoId: string) =>
-    request<AnalysisResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/analyze`,
-      { method: 'POST' },
-    ),
+    request<AnalysisResponse>(`${repo(repoId)}/analyze`, { method: 'POST' }),
 
-  getAnalysisResults: (repoId: string) =>
-    request<AnalysisResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/results`,
-    ),
-  
-  deleteRepository: (repoId: string) =>
-  request<{ message: string; repository_id: string }>(
-    `/repositories/${encodeURIComponent(repoId)}`,
-    { method: 'DELETE' },
-  ),
+  /** Latest saved analysis, or null if none has been run. */
+  getAnalysisResults: (repoId: string, signal?: AbortSignal) =>
+    optional<AnalysisResponse>(`${repo(repoId)}/results`, signal),
 
-  /** Previously generated summary, or null if none exists. Never calls the LLM. */
-  getSummary: async (repoId: string): Promise<SummaryResponse | null> => {
-    try {
-      return await request<SummaryResponse>(
-        `/repositories/${encodeURIComponent(repoId)}/summary`,
-      )
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 404) return null
-      throw error
-    }
-  },
+  /** Previously generated summary, or null. Never calls the LLM. */
+  getSummary: (repoId: string, signal?: AbortSignal) =>
+    optional<SummaryResponse>(`${repo(repoId)}/summary`, signal),
 
+  /** Sends repository code to the LLM provider. */
   generateSummary: (repoId: string, options: { force?: boolean } = {}) =>
-    request<SummaryResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/summary${options.force ? '?force=true' : ''}`,
-      { method: 'POST' },
-    ),
+    request<SummaryResponse>(`${repo(repoId)}/summary${options.force ? '?force=true' : ''}`, { method: 'POST' }),
 
+  /** Sends one file to the LLM provider. */
   explainFile: (repoId: string, filePath: string) =>
-    request<ExplainResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/files/explain`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file_path: filePath }),
-      },
-    ),
+    request<ExplainResponse>(`${repo(repoId)}/files/explain`, json({ file_path: filePath })),
 
   /** Cached on the server; `refresh` recomputes it. */
   getDependenciesAnalysis: (
     repoId: string,
-    options: { refresh?: boolean; maxNodes?: number } = {},
+    options: { refresh?: boolean; maxNodes?: number; signal?: AbortSignal } = {},
   ) => {
     const params = new URLSearchParams({ max_nodes: String(options.maxNodes ?? 200) })
     if (options.refresh) params.set('refresh', 'true')
-    return request<DependenciesAnalysisResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/dependencies?${params}`,
-    )
+    return request<DependenciesAnalysisResponse>(`${repo(repoId)}/dependencies?${params}`, {
+      signal: options.signal,
+    })
   },
-
-  getCircularDependencies: (repoId: string) =>
-    request<{ repository_id: string; circular_dependencies: CircularDependency[]; count: number }>(
-      `/repositories/${encodeURIComponent(repoId)}/dependencies/circular`,
-    ),
-
-  getExternalDependencies: (repoId: string) =>
-    request<{ repository_id: string; external_dependencies: ExternalDependency[]; count: number }>(
-      `/repositories/${encodeURIComponent(repoId)}/dependencies/external`,
-    ),
-
-  getModuleDependencyGraph: (repoId: string) =>
-    request<{ repository_id: string; module_graph: DependenciesGraphData['moduleGraph']; module_count: number; dependency_count: number }>(
-      `/repositories/${encodeURIComponent(repoId)}/dependencies/module-graph`,
-    ),
-
-  getDependenciesStats: (repoId: string) =>
-    request<{ repository_id: string; stats: DependenciesStats }>(
-      `/repositories/${encodeURIComponent(repoId)}/dependencies/stats`,
-    ),
 }

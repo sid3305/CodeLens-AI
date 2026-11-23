@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '../../test/render'
 
@@ -216,5 +216,42 @@ describe('AppShell link import focus (X1)', () => {
     await importLink('src/app.py')
 
     expect(await screen.findByText('print("focused")')).toBeInTheDocument()
+  })
+})
+
+describe('AppShell repository switch (C4)', () => {
+  it('cancels the previous repository’s in-flight requests', async () => {
+    const repos = [
+      { id: 'r1', name: 'first', source: 'zip', file_count: 2, created_at: '' },
+      { id: 'r2', name: 'second', source: 'zip', file_count: 1, created_at: '' },
+    ]
+    const signals: Record<string, AbortSignal[]> = { r1: [], r2: [] }
+    mockedApi.health.mockResolvedValue({ status: 'healthy' })
+    mockedApi.getRepositories.mockResolvedValue(repos)
+    // Requests for r1 never answer; r2 answers at once.
+    const pendingFor = (id: string, signal: AbortSignal, value: unknown) => {
+      signals[id].push(signal)
+      return id === 'r1' ? new Promise(() => {}) : Promise.resolve(value)
+    }
+    mockedApi.getFiles.mockImplementation((id: string, signal: AbortSignal) =>
+      pendingFor(id, signal, { repository_id: id, total_files: 0, files: [] }),
+    )
+    mockedApi.getAnalysisResults.mockImplementation((id: string, signal: AbortSignal) =>
+      pendingFor(id, signal, null),
+    )
+    mockedApi.getSummary.mockImplementation((id: string, signal: AbortSignal) =>
+      pendingFor(id, signal, null),
+    )
+    const user = userEvent.setup()
+    renderWithProviders(<AppShell />)
+
+    await waitFor(() => expect(signals.r1.length).toBeGreaterThanOrEqual(3))
+    expect(signals.r1.every((signal) => !signal.aborted)).toBe(true)
+
+    await user.selectOptions(screen.getByLabelText('Repository'), 'r2')
+
+    await waitFor(() => expect(signals.r1.every((signal) => signal.aborted)).toBe(true))
+    expect(signals.r2.length).toBeGreaterThan(0)
+    expect(signals.r2.every((signal) => !signal.aborted)).toBe(true)
   })
 })

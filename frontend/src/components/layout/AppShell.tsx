@@ -1,208 +1,131 @@
-
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
-import WorkspacePanel from './WorkspacePanel'
-import { Button, Dialog, Drawer, IconButton, useToast } from '../ui'
+import { Button, Dialog, Drawer, IconButton, LoadingBlock, useToast } from '../ui'
 import { DESKTOP_QUERY, useMediaQuery } from '../../hooks/useMediaQuery'
 
+import {
+  useAnalysis,
+  useDeleteRepository,
+  useHealth,
+  useImportLink,
+  useImportZip,
+  useRepositories,
+  useRepositoryFiles,
+} from '../../data/hooks'
+import { queryKeys } from '../../data/queryClient'
 import { api, errorMessage } from '../../services/api'
-import { describeAnalysis } from '../../lib/analysis'
-import type {
-  WorkspaceSection,
-  Repository,
-  RepositoryFile,
-  AnalysisResponse,
-} from '../../types'
-
-type ApiStatus = 'checking' | 'online' | 'offline'
-
-const HEALTH_CHECK_INTERVAL_MS = 30_000
-
-/** Files and latest analysis, tagged with the repository they belong to. */
-interface RepositoryData {
-  repoId: string
-  files: RepositoryFile[]
-  analysis: AnalysisResponse | null
-}
+import type { Repository, WorkspaceSection } from '../../types'
+import type { FindingFilters } from '../workspace/findingFilters'
+import ArchitecturePage from '../../pages/ArchitecturePage'
+import FilePreviewPage from '../../pages/FilePreviewPage'
+import IssuesPage from '../../pages/IssuesPage'
+import OverviewPage from '../../pages/OverviewPage'
+import WelcomePage from '../../pages/WelcomePage'
 
 /** The previewed file, tagged with its repository. */
 interface FileSelection {
   repoId: string
   path: string
   line: number | null
-  content: string | null
+}
+
+const DEFAULT_FILTERS: FindingFilters = { query: '', severity: 'All', analyzer: 'All' }
+
+const SECTION_TITLES: Record<WorkspaceSection, string> = {
+  overview: 'Overview',
+  architecture: 'Architecture',
+  issues: 'Issues',
+  'file-preview': 'File preview',
 }
 
 export default function AppShell() {
-  const [activeSection, setActiveSection] =
-    useState<WorkspaceSection>('overview')
+  const [activeSection, setActiveSection] = useState<WorkspaceSection>('overview')
 
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [drawerOpen, setDrawerOpen] = useState(false)
 
-  const [repositories, setRepositories] = useState<Repository[]>([])
-  const [selectedRepositoryId, setSelectedRepositoryId] =
-    useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const { notify } = useToast()
 
-  // Data is stored with the id it belongs to and only used while that id
-  // is selected, so switching repositories never shows stale data and
-  // late responses for a previous selection are ignored.
-  const [repositoryData, setRepositoryData] = useState<RepositoryData | null>(null)
+  const health = useHealth()
+  const apiStatus = health.isPending ? 'checking' : health.isError ? 'offline' : 'online'
+
+  const repositoriesQuery = useRepositories()
+  const repositories = repositoriesQuery.data ?? []
+  const [chosenRepositoryId, setChosenRepositoryId] = useState<string | null>(null)
+  // Falls back to the first repository when the chosen one is gone.
+  const selectedRepository =
+    repositories.find((repo) => repo.id === chosenRepositoryId) ?? repositories[0] ?? null
+  const selectedRepositoryId = selectedRepository?.id ?? null
+
+  // Server state is keyed by repository id (query keys) and so are the
+  // selections below: switching repositories cancels the old requests and
+  // never shows another repository's data.
+  const files = useRepositoryFiles(selectedRepositoryId).data ?? []
+  const analysis = useAnalysis(selectedRepositoryId).data ?? null
+
   const [fileSelection, setFileSelection] = useState<FileSelection | null>(null)
   const [explorerFocus, setExplorerFocus] = useState<{ repoId: string; path: string } | null>(null)
-
-  const [loading, setLoading] = useState(true)
-  const [importing, setImporting] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
-  const { notify } = useToast()
-  const [apiStatus, setApiStatus] = useState<ApiStatus>('checking')
-  const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null)
-  const [deleting, setDeleting] = useState(false)
-
-  const selectedRepository =
-    repositories.find((repo) => repo.id === selectedRepositoryId) ?? null
-
-  const currentData =
-    repositoryData && repositoryData.repoId === selectedRepositoryId
-      ? repositoryData
-      : null
-  const files = currentData?.files ?? []
-  const analysis = currentData?.analysis ?? null
+  const [filters, setFilters] = useState<{ repoId: string; value: FindingFilters } | null>(null)
 
   const currentFile =
-    fileSelection && fileSelection.repoId === selectedRepositoryId
-      ? fileSelection
-      : null
+    fileSelection && fileSelection.repoId === selectedRepositoryId ? fileSelection : null
   const selectedFilePath = currentFile?.path ?? null
-  const selectedFileContent = currentFile?.content ?? null
-  const selectedLine = currentFile?.line ?? null
+  const currentFilters =
+    filters && filters.repoId === selectedRepositoryId ? filters.value : DEFAULT_FILTERS
 
-  const applyRepositories = useCallback((data: Repository[]) => {
-    setRepositories(data)
-    setSelectedRepositoryId((current) =>
-      current && data.some((repo) => repo.id === current)
-        ? current
-        : data[0]?.id ?? null,
-    )
-  }, [])
+  const importZip = useImportZip()
+  const importLink = useImportLink()
+  const importing = importZip.isPending || importLink.isPending
+  const deleteRepository = useDeleteRepository()
+  const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null)
+  const deleting = deleteRepository.isPending
 
-  const loadRepositories = useCallback(async () => {
-    try {
-      applyRepositories(await api.getRepositories())
-    } catch (err) {
-      notify('error', errorMessage(err, 'Unable to load repositories.'))
-    } finally {
-      setLoading(false)
+  const selectRepository = (id: string | null) => setChosenRepositoryId(id)
+
+  const handleSelectFile = (
+    path: string,
+    line: number | null = null,
+    repoId: string | null = selectedRepositoryId,
+  ) => {
+    if (!repoId) return
+    setFileSelection({ repoId, path, line })
+    setActiveSection('file-preview')
+  }
+
+  /** Open what a link pointed at: a file in the preview, a folder in the explorer. */
+  const openFocus = async (repoId: string, focusPath: string) => {
+    const listing = await queryClient.fetchQuery({
+      queryKey: queryKeys.files(repoId),
+      queryFn: ({ signal }) => api.getFiles(repoId, signal),
+    })
+    if (listing.files.some((file) => file.path === focusPath)) {
+      handleSelectFile(focusPath, null, repoId)
+    } else {
+      setExplorerFocus({ repoId, path: focusPath })
     }
-  }, [applyRepositories, notify])
-
-  useEffect(() => {
-    let cancelled = false
-
-    api
-      .getRepositories()
-      .then(
-        (data) => {
-          if (!cancelled) applyRepositories(data)
-        },
-        (err: unknown) => {
-          if (!cancelled) notify('error', errorMessage(err, 'Unable to load repositories.'))
-        },
-      )
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [applyRepositories, notify])
-
-  useEffect(() => {
-    let cancelled = false
-
-    const checkHealth = () => {
-      api.health().then(
-        () => {
-          if (!cancelled) setApiStatus('online')
-        },
-        () => {
-          if (!cancelled) setApiStatus('offline')
-        },
-      )
-    }
-
-    checkHealth()
-    const timer = window.setInterval(checkHealth, HEALTH_CHECK_INTERVAL_MS)
-
-    return () => {
-      cancelled = true
-      window.clearInterval(timer)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!selectedRepositoryId) return
-
-    const repoId = selectedRepositoryId
-    let cancelled = false
-
-    Promise.all([
-      api.getFiles(repoId),
-      api.getAnalysisResults(repoId).catch(() => null),
-    ]).then(
-      ([fileResponse, analysisResponse]) => {
-        if (!cancelled) {
-          setRepositoryData({
-            repoId,
-            files: fileResponse.files,
-            analysis: analysisResponse,
-          })
-        }
-      },
-      (err: unknown) => {
-        if (!cancelled) notify('error', errorMessage(err, 'Unable to load repository data.'))
-      },
-    )
-
-    return () => {
-      cancelled = true
-    }
-  }, [selectedRepositoryId, notify])
-
-  const selectRepository = (id: string | null) => {
-    setSelectedRepositoryId(id)
   }
 
   const handleImportZip = async (file: File) => {
-    setImporting(true)
-
     try {
-      const repository = await api.uploadRepository(file)
-
-      await loadRepositories()
+      const repository = await importZip.mutateAsync(file)
       selectRepository(repository.id)
       notify('success', `${repository.name} imported successfully.`)
       return true
     } catch (err) {
-      notify('error', err instanceof Error ? err.message : 'ZIP import failed.')
+      notify('error', errorMessage(err, 'ZIP import failed.'))
       return false
-    } finally {
-      setImporting(false)
     }
   }
 
   const handleImportGitHub = async (repoUrl: string) => {
-    setImporting(true)
-
     try {
-      const repository = await api.importGitHub(repoUrl)
-
-      await loadRepositories()
+      const repository = await importLink.mutateAsync(repoUrl)
       selectRepository(repository.id)
       notify(
         'success',
@@ -211,106 +134,22 @@ export default function AppShell() {
       if (repository.focus_path) await openFocus(repository.id, repository.focus_path)
       return true
     } catch (err) {
-      notify('error', err instanceof Error ? err.message : 'GitHub import failed.')
+      notify('error', errorMessage(err, 'Import failed.'))
       return false
-    } finally {
-      setImporting(false)
     }
   }
 
-  /** Open what a link pointed at: a file in the preview, a folder in the explorer. */
-  const openFocus = async (repoId: string, focusPath: string) => {
-    const listing = await api.getFiles(repoId)
-    if (listing.files.some((file) => file.path === focusPath)) {
-      await handleSelectFile(focusPath, null, repoId)
-    } else {
-      setExplorerFocus({ repoId, path: focusPath })
-    }
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return
+    const target = deleteTarget
+    deleteRepository.mutate(target, {
+      onSuccess: () => {
+        setDeleteTarget(null)
+        notify('success', `${target.name} was deleted successfully.`)
+      },
+      onError: (err) => notify('error', errorMessage(err, 'Unable to delete repository.')),
+    })
   }
-
-  const handleRunAnalysis = async () => {
-    if (!selectedRepositoryId) return
-
-    const repoId = selectedRepositoryId
-    setAnalyzing(true)
-    setFileSelection((current) => (current ? { ...current, line: null } : current))
-
-    try {
-      const result = await api.analyzeRepository(repoId)
-      const outcome = describeAnalysis(result)
-      setRepositoryData((current) =>
-        current && current.repoId === repoId
-          ? { ...current, analysis: result }
-          : current,
-      )
-      notify(outcome.tone, outcome.message)
-    } catch (err) {
-      notify('error', errorMessage(err, 'Analysis failed.'))
-    } finally {
-      setAnalyzing(false)
-    }
-  }
-
-  const handleSelectFile = async (
-    path: string,
-    lineNumber: number | null = null,
-    repoIdOverride: string | null = null,
-  ) => {
-    const repoId = repoIdOverride ?? selectedRepositoryId
-    if (!repoId) return
-
-    const isStillSelected = (current: FileSelection | null): current is FileSelection =>
-      current !== null && current.repoId === repoId && current.path === path
-
-    setFileSelection({ repoId, path, line: lineNumber, content: null })
-    setActiveSection('file-preview')
-
-    try {
-      const result = await api.getFileContent(repoId, path)
-      // Ignore the response if another file was selected meanwhile.
-      setFileSelection((current) =>
-        isStillSelected(current) ? { ...current, content: result.content } : current,
-      )
-    } catch (err) {
-      notify('error', errorMessage(err, 'Unable to read file.'))
-    }
-  }
-
-  const handleConfirmDelete = async () => {
-  if (!deleteTarget) return
-
-  setDeleting(true)
-
-  try {
-    await api.deleteRepository(deleteTarget.id)
-
-    const remainingRepositories = repositories.filter(
-      (repo) => repo.id !== deleteTarget.id,
-    )
-
-    setRepositories(remainingRepositories)
-
-    if (selectedRepositoryId === deleteTarget.id) {
-      selectRepository(remainingRepositories[0]?.id ?? null)
-    }
-
-    setDeleteTarget(null)
-    notify('success', `${deleteTarget.name} was deleted successfully.`)
-  } catch (err) {
-    notify('error', 
-      err instanceof Error ? err.message : 'Unable to delete repository.',
-    )
-  } finally {
-    setDeleting(false)
-  }
-}
-
-  const sectionTitle = {
-    overview: 'Overview',
-    architecture: 'Architecture',
-    issues: 'Issues',
-    'file-preview': 'File preview',
-  }[activeSection]
 
   const sidebar = (
     <Sidebar
@@ -324,21 +163,59 @@ export default function AppShell() {
       onSelectRepository={selectRepository}
       files={files}
       selectedFilePath={selectedFilePath}
-      onSelectFile={handleSelectFile}
+      onSelectFile={(path) => handleSelectFile(path)}
       onImportZip={handleImportZip}
       onImportGitHub={handleImportGitHub}
       onDeleteRepository={(repository) => setDeleteTarget(repository)}
       importing={importing}
-      loading={loading}
+      loading={repositoriesQuery.isPending}
       issueCount={analysis ? analysis.findings.length : null}
       explorerFocusPath={
-        explorerFocus && explorerFocus.repoId === selectedRepositoryId
-          ? explorerFocus.path
-          : null
+        explorerFocus && explorerFocus.repoId === selectedRepositoryId ? explorerFocus.path : null
       }
       onNavigated={isDesktop ? undefined : () => setDrawerOpen(false)}
     />
   )
+
+  let page
+  if (!selectedRepository) {
+    page = repositoriesQuery.isPending ? (
+      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+        <LoadingBlock label="Loading repositories" lines={3} />
+      </div>
+    ) : (
+      <WelcomePage importing={importing} onImportLink={handleImportGitHub} onImportZip={handleImportZip} />
+    )
+  } else if (activeSection === 'overview') {
+    page = <OverviewPage key={selectedRepository.id} repository={selectedRepository} />
+  } else if (activeSection === 'architecture') {
+    page = (
+      <ArchitecturePage
+        key={selectedRepository.id}
+        repository={selectedRepository}
+        onOpenFile={(path) => handleSelectFile(path)}
+      />
+    )
+  } else if (activeSection === 'issues') {
+    page = (
+      <IssuesPage
+        key={selectedRepository.id}
+        repository={selectedRepository}
+        filters={currentFilters}
+        onFiltersChange={(value) => setFilters({ repoId: selectedRepository.id, value })}
+        onOpenFinding={(path, line) => handleSelectFile(path, line)}
+      />
+    )
+  } else {
+    page = (
+      <FilePreviewPage
+        key={`${selectedRepository.id}:${selectedFilePath ?? ''}`}
+        repository={selectedRepository}
+        path={selectedFilePath}
+        line={currentFile?.line ?? null}
+      />
+    )
+  }
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
@@ -395,7 +272,9 @@ export default function AppShell() {
               {selectedRepository && (
                 <>
                   <li aria-hidden="true" className="text-fg-subtle">/</li>
-                  <li aria-current="page" className="truncate font-medium text-fg">{sectionTitle}</li>
+                  <li aria-current="page" className="truncate font-medium text-fg">
+                    {SECTION_TITLES[activeSection]}
+                  </li>
                 </>
               )}
             </ol>
@@ -424,24 +303,15 @@ export default function AppShell() {
           <ThemeToggle />
         </header>
 
-        {/* Room for a future right-hand assistant drawer; nothing is rendered there yet. */}
+        {repositoriesQuery.isError && (
+          <p role="alert" className="border-b border-border bg-danger-soft px-4 py-2 text-sm text-danger">
+            {errorMessage(repositoriesQuery.error, 'Unable to load repositories.')}
+          </p>
+        )}
+
         <div className="flex min-w-0 flex-1">
           <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
-            <WorkspacePanel
-              activeSection={activeSection}
-              repository={selectedRepository}
-              files={files}
-              analysis={analysis}
-              selectedFilePath={selectedFilePath}
-              selectedFileContent={selectedFileContent}
-              onRunAnalysis={handleRunAnalysis}
-              analyzing={analyzing}
-              onImportZip={handleImportZip}
-              onImportGitHub={handleImportGitHub}
-              importing={importing}
-              selectedLine={selectedLine}
-              onOpenFinding={handleSelectFile}
-            />
+            {page}
           </main>
         </div>
       </div>
@@ -464,7 +334,7 @@ export default function AppShell() {
         footer={
           <>
             <Button disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</Button>
-            <Button variant="danger" loading={deleting} onClick={() => void handleConfirmDelete()}>
+            <Button variant="danger" loading={deleting} onClick={handleConfirmDelete}>
               Delete repository
             </Button>
           </>

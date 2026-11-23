@@ -1,7 +1,8 @@
 import { useId, useState } from 'react'
 import { ChevronDown, Code2, ExternalLink, FileCode2 } from 'lucide-react'
 
-import { api, errorMessage } from '../../services/api'
+import { useFileContent } from '../../data/hooks'
+import { errorMessage } from '../../services/api'
 import type { Finding } from '../../types'
 import CodeLines from '../code/CodeLines'
 import { Badge, Button, InlineMessage, LoadingBlock, SeverityBadge, cn } from '../ui'
@@ -19,29 +20,13 @@ export default function FindingCard({
 }) {
   const sourceId = useId()
   const [expanded, setExpanded] = useState(false)
-  const [source, setSource] = useState<string | null>(null)
-  const [sourceLoading, setSourceLoading] = useState(false)
-  const [sourceError, setSourceError] = useState<string | null>(null)
+  // Shares the cached file query with the preview; fetched on first expand.
+  const sourceQuery = useFileContent(repositoryId, expanded && finding.file ? finding.file : null)
+  const source = sourceQuery.data ?? null
+  const sourceLoading = sourceQuery.isFetching && source === null
+  const sourceError = sourceQuery.error ? errorMessage(sourceQuery.error, 'Unable to load source code.') : null
 
-  const loadSource = async () => {
-    if (source !== null || sourceLoading) return
-    setSourceLoading(true)
-    setSourceError(null)
-    try {
-      const result = await api.getFileContent(repositoryId, finding.file)
-      setSource(result.content)
-    } catch (error) {
-      setSourceError(errorMessage(error, 'Unable to load source code.'))
-    } finally {
-      setSourceLoading(false)
-    }
-  }
-
-  const toggleSource = () => {
-    const next = !expanded
-    setExpanded(next)
-    if (next) void loadSource()
-  }
+  const toggleSource = () => setExpanded(!expanded)
 
   const targetLine = finding.line
   let excerpt: { start: number; text: string } | null = null

@@ -1,51 +1,51 @@
-import { useEffect, useId, useState } from 'react'
-import { Files, GitMerge, Network, Package, RefreshCw, Search, Zap } from 'lucide-react'
+import { useContext, useId, useState } from 'react'
+import { GitMerge, Network, Package, Search } from 'lucide-react'
 
-import { api, errorMessage } from '../../services/api'
 import type {
   CircularDependency,
   DependenciesAnalysisResponse,
   ExternalDependency,
   ModuleDependency,
-  Repository,
 } from '../../types'
-import {
-  Badge,
-  Button,
-  Card,
-  CardBody,
-  CardHeader,
-  EmptyState,
-  IconButton,
-  InlineMessage,
-  LoadingBlock,
-  SeverityBadge,
-  StatTile,
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '../ui'
-
-type TabId = 'overview' | 'circular' | 'external' | 'modules'
+import { Badge, Button, EmptyState, SeverityBadge } from '../ui'
+import { OpenFileContext } from './openFile'
 
 /** Last path segment, for either separator style. */
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() || path
 }
 
-/** A module shown by file name, with the full path available on hover. */
-function ModuleName({ path }: { path: string }) {
+/**
+ * A repository file shown by name (full path on hover and for screen
+ * readers). Opens the file preview when the page provides a handler.
+ */
+export function ModuleName({ path }: { path: string }) {
+  const openFile = useContext(OpenFileContext)
+
+  if (!openFile) {
+    return (
+      <span className="font-mono text-sm text-fg" title={path}>
+        {baseName(path)}
+      </span>
+    )
+  }
+
   return (
-    <span className="font-mono text-sm text-fg" title={path}>
+    <button
+      type="button"
+      onClick={() => openFile(path)}
+      title={path}
+      aria-label={`Open ${path}`}
+      className="rounded-sm font-mono text-sm text-accent-text underline-offset-2 hover:underline"
+    >
       {baseName(path)}
-    </span>
+    </button>
   )
 }
 
 const severityLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1)
 
-function CycleCard({ cycle }: { cycle: CircularDependency }) {
+export function CycleCard({ cycle }: { cycle: CircularDependency }) {
   return (
     <article className="rounded-md border border-border bg-surface p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +122,7 @@ function SearchField({ label, value, onChange }: { label: string; value: string;
   )
 }
 
-function ExternalTab({ external }: { external: ExternalDependency[] }) {
+export function ExternalTab({ external }: { external: ExternalDependency[] }) {
   const [filter, setFilter] = useState<'all' | 'prod' | 'dev'>('all')
   const [query, setQuery] = useState('')
   const filterId = useId()
@@ -161,7 +161,7 @@ function ExternalTab({ external }: { external: ExternalDependency[] }) {
   )
 }
 
-function ModulesTab({ modules }: { modules: ModuleDependency[] }) {
+export function ModulesTab({ modules }: { modules: ModuleDependency[] }) {
   const [query, setQuery] = useState('')
   const needle = query.toLowerCase()
   const visible = [...modules]
@@ -183,7 +183,7 @@ function ModulesTab({ modules }: { modules: ModuleDependency[] }) {
   )
 }
 
-function OverviewTab({ analysis, onShowCircular }: { analysis: DependenciesAnalysisResponse; onShowCircular: () => void }) {
+export function OverviewTab({ analysis, onShowCircular }: { analysis: DependenciesAnalysisResponse; onShowCircular: () => void }) {
   const topCycles = analysis.circular_dependencies.slice(0, 3)
   const topPackages = [...analysis.external_dependencies].sort((a, b) => b.import_count - a.import_count).slice(0, 5)
   const topModules = [...analysis.module_dependencies].sort((a, b) => b.edge_count - a.edge_count).slice(0, 10)
@@ -244,163 +244,21 @@ function OverviewTab({ analysis, onShowCircular }: { analysis: DependenciesAnaly
   )
 }
 
-/** A fetch result tagged with the repository and refresh generation it answers. */
-interface LoadedAnalysis {
-  repoId: string
-  generation: number
-  data: DependenciesAnalysisResponse | null
-  error: string | null
-}
-
-export default function DependenciesPanel({ repository }: { repository: Repository | null }) {
-  const [activeTab, setActiveTab] = useState<TabId>('overview')
-  const [generation, setGeneration] = useState(0)
-  const [loaded, setLoaded] = useState<LoadedAnalysis | null>(null)
-
-  // Keyed on the repository id (not the object, which is recreated on every
-  // repository-list refresh) and an explicit refresh generation.
-  const repositoryId = repository?.id ?? null
-
-  useEffect(() => {
-    if (!repositoryId) return
-
-    const requested = generation
-    let cancelled = false
-
-    // Generation 0 is the first load (served from the cache); later
-    // generations come from the Refresh button and recompute.
-    const request =
-      requested === 0
-        ? api.getDependenciesAnalysis(repositoryId)
-        : api.getDependenciesAnalysis(repositoryId, { refresh: true })
-
-    request.then(
-      (data) => {
-        if (!cancelled) setLoaded({ repoId: repositoryId, generation: requested, data, error: null })
-      },
-      (err: unknown) => {
-        if (!cancelled) {
-          setLoaded({
-            repoId: repositoryId,
-            generation: requested,
-            data: null,
-            error: errorMessage(err, 'Failed to load dependencies'),
-          })
-        }
-      },
-    )
-
-    return () => {
-      cancelled = true
-    }
-  }, [repositoryId, generation])
-
-  const current = loaded && loaded.repoId === repositoryId ? loaded : null
-  // While refreshing the same repository the previous result stays visible.
-  const analysis = current?.data ?? null
-  const error = current?.error ?? null
-  const loading = current === null || current.generation !== generation
-
-  const refresh = () => setGeneration((value) => value + 1)
-
-  if (!repository) {
+export function CyclesTab({ cycles }: { cycles: CircularDependency[] }) {
+  if (cycles.length === 0) {
     return (
-      <Card>
-        <EmptyState title="No repository selected" description="Import a repository to analyze its dependencies." />
-      </Card>
+      <EmptyState
+        headingLevel={3}
+        title="No circular imports"
+        description="No file imports itself through a chain of other files."
+      />
     )
   }
-
   return (
-    <Card aria-labelledby="dependencies-heading">
-      <CardHeader
-        titleId="dependencies-heading"
-        title="Dependency analysis"
-        description="Imports between files, circular dependencies and external packages"
-        actions={
-          <IconButton
-            aria-label="Refresh dependency analysis"
-            icon={<RefreshCw size={16} className={loading ? 'animate-spin' : undefined} />}
-            disabled={loading}
-            onClick={refresh}
-          />
-        }
-      />
-      <CardBody className="space-y-5">
-        {error && (
-          <div className="flex flex-wrap items-center gap-2">
-            <InlineMessage tone="error">{error}</InlineMessage>
-            <Button size="sm" onClick={refresh} aria-label="Retry dependency analysis">Retry</Button>
-          </div>
-        )}
-
-        {!analysis && loading && <LoadingBlock label="Analyzing dependencies" lines={4} />}
-
-        {analysis && (
-          <>
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-              <StatTile icon={<Files size={18} />} label="Source files" value={analysis.total_internal_modules} />
-              <StatTile icon={<Package size={18} />} label="External packages" value={analysis.total_external_dependencies} />
-              <StatTile icon={<GitMerge size={18} />} label="Import cycles" value={analysis.stats.circular_import_count} />
-              <StatTile icon={<Zap size={18} />} label="Import statements" value={analysis.stats.total_imports} />
-            </div>
-
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
-              <TabsList label="Dependency views">
-                <TabsTrigger value="overview">Overview</TabsTrigger>
-                <TabsTrigger value="circular">Circular ({analysis.circular_dependencies.length})</TabsTrigger>
-                <TabsTrigger value="external">External ({analysis.external_dependencies.length})</TabsTrigger>
-                <TabsTrigger value="modules">Modules ({analysis.module_dependencies.length})</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="overview">
-                <OverviewTab analysis={analysis} onShowCircular={() => setActiveTab('circular')} />
-              </TabsContent>
-              <TabsContent value="circular">
-                {analysis.circular_dependencies.length === 0 ? (
-                  <EmptyState headingLevel={3} title="No circular imports" description="No file imports itself through a chain of other files." />
-                ) : (
-                  <ul className="space-y-3">
-                    {analysis.circular_dependencies.map((cycle, index) => (
-                      <li key={index}><CycleCard cycle={cycle} /></li>
-                    ))}
-                  </ul>
-                )}
-              </TabsContent>
-              <TabsContent value="external">
-                <ExternalTab external={analysis.external_dependencies} />
-              </TabsContent>
-              <TabsContent value="modules">
-                <ModulesTab modules={analysis.module_dependencies} />
-              </TabsContent>
-            </Tabs>
-
-            {Object.keys(analysis.language_breakdown).length > 0 && (
-              <table className="w-full text-left text-sm">
-                <caption className="pb-2 text-left font-semibold">Languages</caption>
-                <thead className="text-fg-muted">
-                  <tr>
-                    <th scope="col" className="py-1.5 font-medium">Language</th>
-                    <th scope="col" className="py-1.5 text-right font-medium">Files</th>
-                    <th scope="col" className="py-1.5 text-right font-medium">Internal imports</th>
-                    <th scope="col" className="py-1.5 text-right font-medium">Packages</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(analysis.language_breakdown).map(([language, stats]) => (
-                    <tr key={language} className="border-t border-border">
-                      <th scope="row" className="py-1.5 font-medium capitalize">{language}</th>
-                      <td className="py-1.5 text-right tabular-nums">{stats.files}</td>
-                      <td className="py-1.5 text-right tabular-nums">{stats.internal_deps}</td>
-                      <td className="py-1.5 text-right tabular-nums">{stats.external_deps}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </>
-        )}
-      </CardBody>
-    </Card>
+    <ul className="space-y-3">
+      {cycles.map((cycle, index) => (
+        <li key={index}><CycleCard cycle={cycle} /></li>
+      ))}
+    </ul>
   )
 }
