@@ -1,0 +1,136 @@
+/*
+ * Design tokens. One set of names; light values on :root, dark values when
+ * <html data-theme="dark">. Every text pair meets WCAG AA (4.5:1) and every
+ * UI boundary 3:1 in both themes; src/styles/tokens.test.ts enforces this.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* Neutrals */
+  --cl-bg: #f6f7f9;
+  --cl-surface: #ffffff;
+  --cl-surface-2: #f0f2f5;
+  --cl-surface-hover: #e7eaf0;
+  --cl-border: #e1e4ea; /* decorative separators only */
+  --cl-border-strong: #7f8796; /* control boundaries (3:1) */
+  --cl-fg: #161a22;
+  --cl-fg-muted: #4a5261;
+  --cl-fg-subtle: #5c6474;
+
+  /* Accent (indigo) */
+  --cl-accent: #4f46e5;
+  --cl-accent-hover: #4338ca;
+  --cl-accent-soft: #eef0ff;
+  --cl-accent-text: #4338ca;
+  --cl-on-accent: #ffffff;
+  --cl-focus: #4f46e5;
+
+  /* Status */
+  --cl-danger: #b42318;
+  --cl-danger-soft: #fdecea;
+  --cl-success: #107a45;
+  --cl-success-soft: #e6f4ec;
+  --cl-warning: #8a5300;
+  --cl-warning-soft: #fdf3e1;
+
+  /* Severity (always paired with a label and icon shape) */
+  --cl-sev-critical: #a8141e;
+  --cl-sev-critical-soft: #fde7e9;
+  --cl-sev-high: #a63b00;
+  --cl-sev-high-soft: #fff0e5;
+  --cl-sev-medium: #7c5a00;
+  --cl-sev-medium-soft: #fdf5dc;
+  --cl-sev-low: #1d4fb8;
+  --cl-sev-low-soft: #e8effd;
+  --cl-sev-info: #4a5261;
+  --cl-sev-info-soft: #eef0f3;
+
+  /* Code */
+  --cl-code-bg: #f6f7f9;
+  --cl-code-highlight: #fff4cc;
+
+  /* Spacing: 8 px scale */
+  --cl-space-1: 8px;
+  --cl-space-2: 16px;
+  --cl-space-3: 24px;
+  --cl-space-4: 32px;
+  --cl-space-5: 40px;
+  --cl-space-6: 48px;
+  --cl-space-8: 64px;
+
+  /* Radius */
+  --cl-radius-sm: 6px;
+  --cl-radius-md: 10px;
+
+  /* Elevation */
+  --cl-shadow-sm: 0 1px 2px rgb(16 24 40 / 0.06);
+  --cl-shadow-md: 0 4px 12px rgb(16 24 40 / 0.08);
+  --cl-shadow-lg: 0 16px 40px rgb(16 24 40 / 0.18);
+
+  /* Layers */
+  --cl-z-header: 10;
+  --cl-z-drawer: 40;
+  --cl-z-overlay: 50;
+  --cl-z-toast: 60;
+  --cl-z-tooltip: 70;
+
+  /* Motion */
+  --cl-duration-fast: 120ms;
+  --cl-duration-base: 200ms;
+  --cl-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Explicit dark theme (set before first paint by the script in index.html). */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --cl-bg: #0e1116;
+  --cl-surface: #161a21;
+  --cl-surface-2: #1d222b;
+  --cl-surface-hover: #262c37;
+  --cl-border: #2b313c;
+  --cl-border-strong: #6b7484;
+  --cl-fg: #e9ecf1;
+  --cl-fg-muted: #aab2bf;
+  --cl-fg-subtle: #959eac;
+
+  --cl-accent: #8b93ff;
+  --cl-accent-hover: #a5acff;
+  --cl-accent-soft: #23264a;
+  --cl-accent-text: #a9b0ff;
+  --cl-on-accent: #0e1116;
+  --cl-focus: #a5acff;
+
+  --cl-danger: #ff8a80;
+  --cl-danger-soft: #3a1d1d;
+  --cl-success: #5fd39a;
+  --cl-success-soft: #16301f;
+  --cl-warning: #f2b84b;
+  --cl-warning-soft: #33280f;
+
+  --cl-sev-critical: #ff8f8f;
+  --cl-sev-critical-soft: #3d1a1d;
+  --cl-sev-high: #ffab70;
+  --cl-sev-high-soft: #3a2414;
+  --cl-sev-medium: #f0c85a;
+  --cl-sev-medium-soft: #332a10;
+  --cl-sev-low: #8fb4ff;
+  --cl-sev-low-soft: #1a2742;
+  --cl-sev-info: #aab2bf;
+  --cl-sev-info-soft: #232832;
+
+  --cl-code-bg: #11151b;
+  --cl-code-highlight: #3a3216;
+
+  --cl-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4);
+  --cl-shadow-md: 0 4px 12px rgb(0 0 0 / 0.45);
+  --cl-shadow-lg: 0 16px 40px rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --cl-duration-fast: 0ms;
+    --cl-duration-base: 0ms;
+  }
+}

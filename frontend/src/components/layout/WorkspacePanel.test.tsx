@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { renderWithProviders } from '../../test/render'
 import type { ComponentProps } from 'react'
 
 import WorkspacePanel from './WorkspacePanel'
@@ -47,7 +48,6 @@ function props(overrides: Partial<Props> = {}): Props {
     selectedFileContent: null,
     onRunAnalysis: vi.fn(),
     analyzing: false,
-    onRefresh: vi.fn(),
     onImportZip: vi.fn(async () => {}),
     onImportGitHub: vi.fn(async () => {}),
     selectedLine: null,
@@ -65,7 +65,7 @@ beforeEach(() => {
 
 describe('WorkspacePanel AI summary (A1 / BUG-02, BUG-03)', () => {
   it('never sends code to the LLM without an explicit click', async () => {
-    render(<WorkspacePanel {...props()} />)
+    renderWithProviders(<WorkspacePanel {...props()} />)
 
     await waitFor(() => expect(mockedApi.getSummary).toHaveBeenCalledWith(repoA.id))
     expect(mockedApi.generateSummary).not.toHaveBeenCalled()
@@ -74,7 +74,7 @@ describe('WorkspacePanel AI summary (A1 / BUG-02, BUG-03)', () => {
   it('does not retry automatically after a failed generation', async () => {
     mockedApi.generateSummary.mockRejectedValue(new Error('Invalid API Key'))
     const user = userEvent.setup()
-    render(<WorkspacePanel {...props()} />)
+    renderWithProviders(<WorkspacePanel {...props()} />)
 
     await user.click(await screen.findByRole('button', { name: /generate ai summary/i }))
     await screen.findByText(/invalid api key/i)
@@ -87,7 +87,7 @@ describe('WorkspacePanel AI summary (A1 / BUG-02, BUG-03)', () => {
     mockedApi.getSummary.mockImplementation(async (id: string) =>
       id === repoA.id ? summaryFor(repoA) : null,
     )
-    const { rerender } = render(<WorkspacePanel {...props()} />)
+    const { rerender } = renderWithProviders(<WorkspacePanel {...props()} />)
     await screen.findByText('Summary of repo-a')
 
     rerender(<WorkspacePanel {...props({ repository: repoB })} />)
@@ -100,7 +100,7 @@ describe('WorkspacePanel AI summary (A1 / BUG-02, BUG-03)', () => {
 describe('WorkspacePanel sections (A10)', () => {
   it('shows dependency analysis under Architecture', async () => {
     mockedApi.getDependenciesAnalysis.mockReturnValue(new Promise(() => {}))
-    render(<WorkspacePanel {...props({ activeSection: 'architecture' })} />)
+    renderWithProviders(<WorkspacePanel {...props({ activeSection: 'architecture' })} />)
 
     expect(screen.getByRole('heading', { level: 1, name: 'Architecture' })).toBeInTheDocument()
     expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledWith(repoA.id)
@@ -108,14 +108,14 @@ describe('WorkspacePanel sections (A10)', () => {
   })
 
   it('guides the user instead of showing a placeholder when no file is selected', () => {
-    render(<WorkspacePanel {...props({ activeSection: 'file-preview' })} />)
+    renderWithProviders(<WorkspacePanel {...props({ activeSection: 'file-preview' })} />)
 
     expect(screen.getByText(/select a file in the explorer/i)).toBeInTheDocument()
     expect(screen.queryByText(/later milestone/i)).not.toBeInTheDocument()
   })
 
   it('does not present a made-up repository health metric', () => {
-    render(<WorkspacePanel {...props()} />)
+    renderWithProviders(<WorkspacePanel {...props()} />)
 
     expect(screen.queryByText(/repository health/i)).not.toBeInTheDocument()
   })
@@ -125,7 +125,7 @@ describe('WorkspacePanel regenerate (A2 / BUG-05)', () => {
   it('asks the backend to bypass the saved summary', async () => {
     mockedApi.getSummary.mockResolvedValue(summaryFor(repoA))
     const user = userEvent.setup()
-    render(<WorkspacePanel {...props()} />)
+    renderWithProviders(<WorkspacePanel {...props()} />)
 
     await user.click(await screen.findByRole('button', { name: /regenerate summary/i }))
 
@@ -168,7 +168,7 @@ describe('WorkspacePanel file explanation (A1 / BUG-04)', () => {
       selectedFilePath: 'a.py',
       selectedFileContent: 'x = 1',
     })
-    const { rerender } = render(<WorkspacePanel {...base} />)
+    const { rerender } = renderWithProviders(<WorkspacePanel {...base} />)
 
     await user.click(screen.getByRole('button', { name: /explain this file/i }))
     await screen.findByText('Explanation of a.py')

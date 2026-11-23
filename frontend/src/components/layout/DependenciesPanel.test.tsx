@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { renderWithProviders } from '../../test/render'
 
 import DependenciesPanel from './DependenciesPanel'
 import { api } from '../../services/api'
@@ -49,8 +50,8 @@ const repository: Repository = { id: 'r', name: 'repo', source: 'zip', file_coun
 
 describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
   it('does not re-run the analysis when the repository list is refreshed', async () => {
-    const { rerender } = render(<DependenciesPanel repository={repository} />)
-    await screen.findByRole('button', { name: /external/i })
+    const { rerender } = renderWithProviders(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('tab', { name: /external/i })
 
     // A repository-list refresh produces a new object for the same repository.
     rerender(<DependenciesPanel repository={{ ...repository }} />)
@@ -61,8 +62,8 @@ describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
 
   it('re-runs the analysis exactly once when refresh is clicked', async () => {
     const user = userEvent.setup()
-    render(<DependenciesPanel repository={repository} />)
-    await screen.findByRole('button', { name: /external/i })
+    renderWithProviders(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('tab', { name: /external/i })
 
     await user.click(screen.getByRole('button', { name: /refresh dependency analysis/i }))
     await waitFor(() => expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(2))
@@ -73,8 +74,8 @@ describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
 
   it('asks the backend to recompute on refresh, not on first load (B2)', async () => {
     const user = userEvent.setup()
-    render(<DependenciesPanel repository={repository} />)
-    await screen.findByRole('button', { name: /external/i })
+    renderWithProviders(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('tab', { name: /external/i })
 
     expect(mockedApi.getDependenciesAnalysis).toHaveBeenLastCalledWith('r')
 
@@ -91,7 +92,7 @@ describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
         ? Promise.resolve(structuredClone(analysis))
         : new Promise(() => {}),
     )
-    const { rerender } = render(<DependenciesPanel repository={repository} />)
+    const { rerender } = renderWithProviders(<DependenciesPanel repository={repository} />)
     expect((await screen.findAllByText('a1.py')).length).toBeGreaterThan(0)
 
     rerender(<DependenciesPanel repository={other} />)
@@ -102,16 +103,16 @@ describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
 
 describe('DependenciesPanel (A10)', () => {
   it('does not offer the unimplemented graph view', async () => {
-    render(<DependenciesPanel repository={repository} />)
-    await screen.findByRole('button', { name: /external/i })
+    renderWithProviders(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('tab', { name: /external/i })
 
-    expect(screen.queryByRole('button', { name: /^graph$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tab', { name: /^graph$/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/will be implemented/i)).not.toBeInTheDocument()
   })
 
   it('renders module names as text rather than buttons that do nothing', async () => {
-    render(<DependenciesPanel repository={repository} />)
-    await screen.findByRole('button', { name: /external/i })
+    renderWithProviders(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('tab', { name: /external/i })
 
     expect(screen.queryByRole('button', { name: /a1\.py/ })).not.toBeInTheDocument()
     expect(screen.getAllByText('a1.py').length).toBeGreaterThan(0)
@@ -119,7 +120,7 @@ describe('DependenciesPanel (A10)', () => {
 
   it('"View all" opens the circular dependencies tab', async () => {
     const user = userEvent.setup()
-    render(<DependenciesPanel repository={repository} />)
+    renderWithProviders(<DependenciesPanel repository={repository} />)
 
     await user.click(await screen.findByRole('button', { name: /view all 4 circular/i }))
 
@@ -128,9 +129,9 @@ describe('DependenciesPanel (A10)', () => {
 
   it('has no per-package details button without behaviour', async () => {
     const user = userEvent.setup()
-    render(<DependenciesPanel repository={repository} />)
+    renderWithProviders(<DependenciesPanel repository={repository} />)
 
-    await user.click(await screen.findByRole('button', { name: /external/i }))
+    await user.click(await screen.findByRole('tab', { name: /external/i }))
 
     expect(screen.queryByTitle(/view dependency details/i)).not.toBeInTheDocument()
   })

@@ -1,17 +1,14 @@
 
 import { useCallback, useEffect, useState } from 'react'
-import {
-  PanelLeftClose,
-  PanelLeftOpen,
-  Sun,
-  Moon,
-} from 'lucide-react'
+import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 import Sidebar from './Sidebar'
+import ThemeToggle from './ThemeToggle'
 import WorkspacePanel from './WorkspacePanel'
+import { Button, Dialog, IconButton, useToast } from '../ui'
 
 import { api, errorMessage } from '../../services/api'
-import { describeAnalysis, type MessageTone } from '../../lib/analysis'
+import { describeAnalysis } from '../../lib/analysis'
 import type {
   WorkspaceSection,
   Repository,
@@ -19,13 +16,7 @@ import type {
   AnalysisResponse,
 } from '../../types'
 
-type Theme = 'light' | 'dark'
 type ApiStatus = 'checking' | 'online' | 'offline'
-
-interface Notice {
-  tone: MessageTone
-  text: string
-}
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000
 
@@ -49,7 +40,6 @@ export default function AppShell() {
     useState<WorkspaceSection>('overview')
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [theme, setTheme] = useState<Theme>('light')
 
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] =
@@ -65,8 +55,7 @@ export default function AppShell() {
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<Notice | null>(null)
+  const { notify } = useToast()
   const [apiStatus, setApiStatus] = useState<ApiStatus>('checking')
   const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -102,11 +91,11 @@ export default function AppShell() {
     try {
       applyRepositories(await api.getRepositories())
     } catch (err) {
-      setError(errorMessage(err, 'Unable to load repositories.'))
+      notify('error', errorMessage(err, 'Unable to load repositories.'))
     } finally {
       setLoading(false)
     }
-  }, [applyRepositories])
+  }, [applyRepositories, notify])
 
   useEffect(() => {
     let cancelled = false
@@ -118,7 +107,7 @@ export default function AppShell() {
           if (!cancelled) applyRepositories(data)
         },
         (err: unknown) => {
-          if (!cancelled) setError(errorMessage(err, 'Unable to load repositories.'))
+          if (!cancelled) notify('error', errorMessage(err, 'Unable to load repositories.'))
         },
       )
       .finally(() => {
@@ -128,7 +117,7 @@ export default function AppShell() {
     return () => {
       cancelled = true
     }
-  }, [applyRepositories])
+  }, [applyRepositories, notify])
 
   useEffect(() => {
     let cancelled = false
@@ -173,34 +162,31 @@ export default function AppShell() {
         }
       },
       (err: unknown) => {
-        if (!cancelled) setError(errorMessage(err, 'Unable to load repository data.'))
+        if (!cancelled) notify('error', errorMessage(err, 'Unable to load repository data.'))
       },
     )
 
     return () => {
       cancelled = true
     }
-  }, [selectedRepositoryId])
+  }, [selectedRepositoryId, notify])
 
   const selectRepository = (id: string | null) => {
-    setError(null)
     setSelectedRepositoryId(id)
   }
 
   const handleImportZip = async (file: File) => {
     setImporting(true)
-    setError(null)
-    setNotice(null)
 
     try {
       const repository = await api.uploadRepository(file)
 
       await loadRepositories()
       selectRepository(repository.id)
-      setNotice({ tone: 'success', text: `${repository.name} imported successfully.` })
+      notify('success', `${repository.name} imported successfully.`)
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'ZIP import failed.')
+      notify('error', err instanceof Error ? err.message : 'ZIP import failed.')
       return false
     } finally {
       setImporting(false)
@@ -209,22 +195,20 @@ export default function AppShell() {
 
   const handleImportGitHub = async (repoUrl: string) => {
     setImporting(true)
-    setError(null)
-    setNotice(null)
 
     try {
       const repository = await api.importGitHub(repoUrl)
 
       await loadRepositories()
       selectRepository(repository.id)
-      setNotice({
-        tone: 'success',
-        text: `${repository.name}${repository.ref ? ` @ ${repository.ref}` : ''} imported successfully.`,
-      })
+      notify(
+        'success',
+        `${repository.name}${repository.ref ? ` @ ${repository.ref}` : ''} imported successfully.`,
+      )
       if (repository.focus_path) await openFocus(repository.id, repository.focus_path)
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'GitHub import failed.')
+      notify('error', err instanceof Error ? err.message : 'GitHub import failed.')
       return false
     } finally {
       setImporting(false)
@@ -246,8 +230,6 @@ export default function AppShell() {
 
     const repoId = selectedRepositoryId
     setAnalyzing(true)
-    setError(null)
-    setNotice(null)
     setFileSelection((current) => (current ? { ...current, line: null } : current))
 
     try {
@@ -258,9 +240,9 @@ export default function AppShell() {
           ? { ...current, analysis: result }
           : current,
       )
-      setNotice({ tone: outcome.tone, text: outcome.message })
+      notify(outcome.tone, outcome.message)
     } catch (err) {
-      setError(errorMessage(err, 'Analysis failed.'))
+      notify('error', errorMessage(err, 'Analysis failed.'))
     } finally {
       setAnalyzing(false)
     }
@@ -278,7 +260,6 @@ export default function AppShell() {
       current !== null && current.repoId === repoId && current.path === path
 
     setFileSelection({ repoId, path, line: lineNumber, content: null })
-    setError(null)
     setActiveSection('file-preview')
 
     try {
@@ -288,7 +269,7 @@ export default function AppShell() {
         isStillSelected(current) ? { ...current, content: result.content } : current,
       )
     } catch (err) {
-      setError(errorMessage(err, 'Unable to read file.'))
+      notify('error', errorMessage(err, 'Unable to read file.'))
     }
   }
 
@@ -296,7 +277,6 @@ export default function AppShell() {
   if (!deleteTarget) return
 
   setDeleting(true)
-  setError(null)
 
   try {
     await api.deleteRepository(deleteTarget.id)
@@ -312,9 +292,9 @@ export default function AppShell() {
     }
 
     setDeleteTarget(null)
-    setNotice({ tone: 'success', text: `${deleteTarget.name} was deleted successfully.` })
+    notify('success', `${deleteTarget.name} was deleted successfully.`)
   } catch (err) {
-    setError(
+    notify('error', 
       err instanceof Error ? err.message : 'Unable to delete repository.',
     )
   } finally {
@@ -322,8 +302,15 @@ export default function AppShell() {
   }
 }
 
+  const sectionTitle = {
+    overview: 'Overview',
+    architecture: 'Architecture',
+    issues: 'Issues',
+    'file-preview': 'File preview',
+  }[activeSection]
+
   return (
-    <div className="app-shell" data-theme={theme}>
+    <div className="flex min-h-screen bg-bg text-fg">
       {!sidebarCollapsed && (
         <Sidebar
           activeSection={activeSection}
@@ -351,79 +338,49 @@ export default function AppShell() {
         />
       )}
 
-      <div className="main-area">
-        <header className="top-toolbar">
-          <button
-            className="icon-button"
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-[var(--cl-z-header)] flex h-14 items-center gap-2 border-b border-border bg-surface px-3">
+          <IconButton
+            aria-label={sidebarCollapsed ? 'Show navigation' : 'Hide navigation'}
+            aria-expanded={!sidebarCollapsed}
+            icon={sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
             onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? 'Open sidebar' : 'Collapse sidebar'}
-          >
-            {sidebarCollapsed ? (
-              <PanelLeftOpen size={17} />
-            ) : (
-              <PanelLeftClose size={17} />
-            )}
-          </button>
+          />
 
-          <div className="toolbar-repository">
-            {selectedRepository?.name ?? 'No repository selected'}
-            <span>/</span>
-            <strong>Workspace</strong>
-          </div>
+          <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
+            <ol className="flex min-w-0 items-center gap-1.5 text-sm">
+              <li className="truncate text-fg-muted">{selectedRepository?.name ?? 'No repository'}</li>
+              {selectedRepository && (
+                <>
+                  <li aria-hidden="true" className="text-fg-subtle">/</li>
+                  <li aria-current="page" className="truncate font-medium text-fg">{sectionTitle}</li>
+                </>
+              )}
+            </ol>
+          </nav>
 
-          <div className="toolbar-status">
-            <span className={`status-dot ${apiStatus}`} aria-hidden="true" />
+          <p className="hidden items-center gap-1.5 text-sm text-fg-muted sm:inline-flex" role="status">
+            <span
+              aria-hidden="true"
+              className={
+                apiStatus === 'online'
+                  ? 'size-2 rounded-full bg-success'
+                  : apiStatus === 'offline'
+                    ? 'size-2 rounded-full bg-danger'
+                    : 'size-2 rounded-full bg-fg-subtle'
+              }
+            />
             {apiStatus === 'checking'
               ? 'Checking API…'
               : apiStatus === 'online'
                 ? 'API connected'
                 : 'API unreachable'}
-          </div>
+          </p>
 
-          <div className="appearance-switcher">
-            <button
-              className={theme === 'light' ? 'selected' : ''}
-              onClick={() => setTheme('light')}
-              title="Light mode"
-              aria-label="Switch to light mode"
-            >
-              <Sun size={15} />
-              <span>Light</span>
-            </button>
-
-            <button
-              className={theme === 'dark' ? 'selected' : ''}
-              onClick={() => setTheme('dark')}
-              title="Dark mode"
-              aria-label="Switch to dark mode"
-            >
-              <Moon size={15} />
-              <span>Dark</span>
-            </button>
-          </div>
+          <ThemeToggle />
         </header>
 
-        {(error || notice) && (
-          <div
-            className={`status-banner ${error ? 'error' : notice?.tone}`}
-            role={error || notice?.tone === 'error' ? 'alert' : 'status'}
-          >
-            <span>{error ?? notice?.text}</span>
-            <button
-              type="button"
-              className="status-banner-dismiss"
-              aria-label="Dismiss message"
-              onClick={() => {
-                setError(null)
-                setNotice(null)
-              }}
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        <div className="workspace-layout">
+        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
           <WorkspacePanel
             activeSection={activeSection}
             repository={selectedRepository}
@@ -433,48 +390,39 @@ export default function AppShell() {
             selectedFileContent={selectedFileContent}
             onRunAnalysis={handleRunAnalysis}
             analyzing={analyzing}
-            onRefresh={loadRepositories}
             onImportZip={handleImportZip}
             onImportGitHub={handleImportGitHub}
             importing={importing}
             selectedLine={selectedLine}
-            onOpenFinding={handleSelectFile}  
+            onOpenFinding={handleSelectFile}
           />
+        </main>
+      </div>
 
-        </div>
-            </div>
-
-      {deleteTarget && (
-        <div className="modal-backdrop">
-          <div className="confirmation-modal">
-            <h2>Delete repository?</h2>
-
-            <p>
-              Are you sure you want to delete{' '}
-              <strong>{deleteTarget.name}</strong>?
-              This will permanently remove its files and analysis results.
-            </p>
-
-            <div className="modal-actions">
-              <button
-                className="secondary-button"
-                disabled={deleting}
-                onClick={() => setDeleteTarget(null)}
-              >
-                Cancel
-              </button>
-
-              <button
-                className="danger-button"
-                disabled={deleting}
-                onClick={() => void handleConfirmDelete()}
-              >
-                {deleting ? 'Deleting...' : 'Delete Repository'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <Dialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setDeleteTarget(null)
+        }}
+        dismissible={!deleting}
+        title="Delete repository?"
+        description={
+          deleteTarget && (
+            <>
+              <strong className="text-fg">{deleteTarget.name}</strong> and its analysis results will be
+              permanently removed. This cannot be undone.
+            </>
+          )
+        }
+        footer={
+          <>
+            <Button disabled={deleting} onClick={() => setDeleteTarget(null)}>Cancel</Button>
+            <Button variant="danger" loading={deleting} onClick={() => void handleConfirmDelete()}>
+              Delete repository
+            </Button>
+          </>
+        }
+      />
     </div>
   )
 }

@@ -132,10 +132,13 @@ export default function FileExplorer({
       return (
         <div key={file.path}>
           <button
-            className={`file-row ${
-              selectedFilePath === file.path ? 'file-selected' : ''
+            type="button"
+            aria-expanded={isFolder ? isOpen : undefined}
+            aria-current={selectedFilePath === file.path ? 'page' : undefined}
+            className={`flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg ${
+              selectedFilePath === file.path ? 'bg-accent-soft font-medium text-accent-text' : ''
             }`}
-            style={{ paddingLeft: `${12 + depth * 16}px` }}
+            style={{ paddingLeft: `${8 + depth * 14}px` }}
             onClick={() => {
               if (isFolder) {
                 toggleFolder(file.path)
@@ -151,7 +154,7 @@ export default function FileExplorer({
                 <ChevronRight size={14} />
               )
             ) : (
-              <span className="file-chevron-space" />
+              <span className="w-3.5 shrink-0" aria-hidden="true" />
             )}
 
             {isFolder && isOpen ? (
@@ -160,7 +163,7 @@ export default function FileExplorer({
               <FileIcon file={file} />
             )}
 
-            <span>{file.name}</span>
+            <span className="truncate">{file.name}</span>
           </button>
 
           {isFolder && isOpen && (
@@ -171,34 +174,34 @@ export default function FileExplorer({
     })
 
   return (
-    <div className="file-explorer">
-      <div className="explorer-repository">
-        <Folder size={15} />
-        <span>{repositoryName || 'No repository selected'}</span>
-      </div>
+    <div className="space-y-2">
+      <p className="flex items-center gap-1.5 truncate px-2 text-sm font-medium text-fg">
+        <Folder size={14} aria-hidden="true" className="shrink-0 text-fg-muted" />
+        <span className="truncate">{repositoryName || 'No repository selected'}</span>
+      </p>
 
-      <div className="explorer-search">
-        <Search size={14} />
+      <div className="relative px-2">
+        <label htmlFor="file-search" className="sr-only">Find a file</label>
+        <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-4.5 top-1/2 -translate-y-1/2 text-fg-subtle" />
         <input
+          id="file-search"
+          type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder="Find a file..."
+          placeholder="Find a file"
+          className="h-8 w-full rounded-sm border border-border-strong bg-surface pl-7 pr-2 text-sm text-fg placeholder:text-fg-subtle"
         />
       </div>
 
-      <div className="file-tree">
+      <div className="px-1">
         {files.length ? (
           renderFiles(tree)
         ) : (
-          <p style={{ padding: '12px', fontSize: '12px', opacity: 0.65 }}>
-            No repository files loaded.
-          </p>
+          <p className="px-2 py-2 text-sm text-fg-muted">No repository files loaded.</p>
         )}
       </div>
 
-      <div className="explorer-note">
-        {files.length} source files
-      </div>
+      <p className="px-2 text-xs text-fg-subtle">{files.length} files</p>
     </div>
   )
 }

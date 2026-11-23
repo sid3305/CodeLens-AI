@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { screen, within } from '@testing-library/react'
+import { renderWithProviders } from '../../test/render'
 import type { ComponentProps } from 'react'
 
 import Sidebar from './Sidebar'
@@ -28,7 +29,7 @@ function props(overrides: Partial<Props> = {}): Props {
 
 describe('Sidebar navigation (A10)', () => {
   it('only offers sections that are implemented', () => {
-    render(<Sidebar {...props()} />)
+    renderWithProviders(<Sidebar {...props()} />)
 
     const nav = screen.getByRole('navigation', { name: /workspace/i })
     const labels = within(nav)
@@ -39,14 +40,14 @@ describe('Sidebar navigation (A10)', () => {
   })
 
   it('has no controls without behaviour', () => {
-    render(<Sidebar {...props()} />)
+    renderWithProviders(<Sidebar {...props()} />)
 
     expect(screen.queryByText(/workspace settings/i)).not.toBeInTheDocument()
     expect(screen.queryByText('—')).not.toBeInTheDocument()
   })
 
   it('shows the real issue count once an analysis exists', () => {
-    render(<Sidebar {...props({ issueCount: 7 })} />)
+    renderWithProviders(<Sidebar {...props({ issueCount: 7 })} />)
 
     expect(screen.getByRole('button', { name: /issues/i })).toHaveTextContent('7')
   })
@@ -57,7 +58,7 @@ describe('Sidebar import (X1)', () => {
     const prompt = vi.spyOn(window, 'prompt')
     const { default: userEvent } = await import('@testing-library/user-event')
     const user = userEvent.setup()
-    render(<Sidebar {...props()} />)
+    renderWithProviders(<Sidebar {...props()} />)
 
     await user.click(screen.getByRole('button', { name: /import repository/i }))
 

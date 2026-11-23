@@ -1,26 +1,22 @@
-
 import {
+  Bug,
   ChevronDown,
   ChevronRight,
   Code2,
+  FolderGit2,
   LayoutDashboard,
   Network,
-  Bug,
-  FolderGit2,
   Search,
-  Upload,
   Trash2,
+  Upload,
 } from 'lucide-react'
+import { useId, useState } from 'react'
+import type { ReactNode } from 'react'
 
-import { useState } from 'react'
-import type {
-  WorkspaceSection,
-  Repository,
-  RepositoryFile,
-} from '../../types'
-
+import type { Repository, RepositoryFile, WorkspaceSection } from '../../types'
 import FileExplorer from '../explorer/FileExplorer'
 import ImportPanel from '../import/ImportPanel'
+import { Button, IconButton, cn } from '../ui'
 
 interface SidebarProps {
   activeSection: WorkspaceSection
@@ -75,9 +71,7 @@ export default function Sidebar({
   const [repositorySearch, setRepositorySearch] = useState('')
   const [importOpen, setImportOpen] = useState(false)
 
-  const selectedRepository = repositories.find(
-    (repo) => repo.id === selectedRepositoryId,
-  )
+  const selectedRepository = repositories.find((repo) => repo.id === selectedRepositoryId)
 
   const filteredRepositories = repositories.filter((repo) =>
     repo.name.toLowerCase().includes(repositorySearch.toLowerCase()),
@@ -90,157 +84,191 @@ export default function Sidebar({
     })
 
   return (
-    <aside className="sidebar">
-      <div className="sidebar-brand">
-        <div className="brand-icon">
-          <Code2 size={21} />
-        </div>
-        <span>CodeLens <strong>AI</strong></span>
+    <aside
+      aria-label="Workspace navigation"
+      className="sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-border bg-surface"
+    >
+      <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+        <span
+          className="flex size-8 items-center justify-center rounded-sm bg-accent text-on-accent"
+          aria-hidden="true"
+        >
+          <Code2 size={17} />
+        </span>
+        <span className="text-md font-semibold tracking-tight">
+          CodeLens <span className="text-accent-text">AI</span>
+        </span>
       </div>
 
-      <div className="sidebar-content">
-        <section>
-          <button
-            className="sidebar-section-heading"
-            onClick={() => setExplorerOpen(!explorerOpen)}
-          >
-            {explorerOpen ? <ChevronDown /> : <ChevronRight />}
-            <span>EXPLORER</span>
-          </button>
-
-          {explorerOpen && (
-            <FileExplorer
-              key={`${selectedRepositoryId ?? ''}:${explorerFocusPath ?? ''}`}
-              focusPath={explorerFocusPath}
-              files={files}
-              repositoryName={selectedRepository?.name ?? ''}
-              selectedFilePath={selectedFilePath}
-              onSelectFile={onSelectFile}
-            />
-          )}
-        </section>
-
-        <div className="sidebar-divider" />
-
-        <section>
-          <button
-            className="sidebar-section-heading"
-            onClick={() => setWorkspaceOpen(!workspaceOpen)}
-          >
-            {workspaceOpen ? <ChevronDown /> : <ChevronRight />}
-            <span>PROJECT WORKSPACE</span>
-          </button>
-
-          {workspaceOpen && (
-            <nav className="workspace-navigation" aria-label="Workspace sections">
+      <div className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
+        <SidebarSection title="Workspace" open={workspaceOpen} onToggle={() => setWorkspaceOpen(!workspaceOpen)}>
+          <nav aria-label="Workspace sections">
+            <ul className="space-y-0.5">
               {navigation.map(({ id, label, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => onNavigate(id)}
-                  aria-current={activeSection === id ? 'page' : undefined}
-                  className={`nav-item ${
-                    activeSection === id ? 'active' : ''
-                  }`}
-                  data-section={id}
-                >
-                  <Icon size={17} />
-                  <span>{label}</span>
-
-                  {id === 'issues' && issueCount !== null && (
-                    <span className="nav-count">{issueCount}</span>
-                  )}
-                </button>
+                <li key={id}>
+                  <button
+                    type="button"
+                    onClick={() => onNavigate(id)}
+                    aria-current={activeSection === id ? 'page' : undefined}
+                    className={cn(
+                      'flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-base text-fg-muted hover:bg-surface-hover hover:text-fg',
+                      activeSection === id &&
+                        'bg-accent-soft font-medium text-accent-text hover:bg-accent-soft hover:text-accent-text',
+                    )}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    <span>{label}</span>
+                    {id === 'issues' && issueCount !== null && (
+                      <span className="ml-auto rounded-sm bg-surface-2 px-1.5 text-xs font-medium tabular-nums text-fg-muted">
+                        {issueCount}
+                      </span>
+                    )}
+                  </button>
+                </li>
               ))}
-            </nav>
-          )}
-        </section>
+            </ul>
+          </nav>
+        </SidebarSection>
 
-        <div className="sidebar-divider" />
-
-        <section>
-          <button
-            className="sidebar-section-heading"
-            onClick={() => setManagerOpen(!managerOpen)}
-          >
-            {managerOpen ? <ChevronDown /> : <ChevronRight />}
-            <span>REPOSITORIES</span>
-          </button>
-
-          {managerOpen && (
-            <div className="repository-manager">
-              <div className="explorer-search">
-                <Search size={14} />
+        <SidebarSection title="Repositories" open={managerOpen} onToggle={() => setManagerOpen(!managerOpen)}>
+          <div className="space-y-2">
+            {repositories.length > 3 && (
+              <div className="relative px-1">
+                <label htmlFor="repository-search" className="sr-only">Search repositories</label>
+                <Search
+                  size={14}
+                  aria-hidden="true"
+                  className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-fg-subtle"
+                />
                 <input
+                  id="repository-search"
+                  type="search"
                   value={repositorySearch}
                   onChange={(event) => setRepositorySearch(event.target.value)}
-                  placeholder="Search repositories..."
+                  placeholder="Search repositories"
+                  className="h-8 w-full rounded-sm border border-border-strong bg-surface pl-7 pr-2 text-sm text-fg placeholder:text-fg-subtle"
                 />
               </div>
+            )}
 
-              {loading && <small>Loading repositories...</small>}
+            {loading && <p className="px-2 text-sm text-fg-muted" role="status">Loading repositories…</p>}
+            {!loading && filteredRepositories.length === 0 && (
+              <p className="px-2 text-sm text-fg-muted">No repositories imported yet.</p>
+            )}
 
-              {!loading && filteredRepositories.length === 0 && (
-                <small>No repositories imported yet.</small>
-              )}
+            <ul className="space-y-0.5">
+              {filteredRepositories.map((repository) => {
+                const selected = selectedRepositoryId === repository.id
+                const ref = repository.ref
+                  ? repository.ref.length > 20 ? repository.ref.slice(0, 7) : repository.ref
+                  : null
+                return (
+                  <li
+                    key={repository.id}
+                    className={cn(
+                      'flex items-center gap-1 rounded-sm pr-1 hover:bg-surface-hover',
+                      selected && 'bg-surface-2',
+                    )}
+                  >
+                    <button
+                      type="button"
+                      aria-current={selected ? 'true' : undefined}
+                      onClick={() => onSelectRepository(repository.id)}
+                      className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
+                    >
+                      <FolderGit2 size={16} aria-hidden="true" className="shrink-0 text-fg-muted" />
+                      <span className="min-w-0">
+                        <span className={cn('block truncate text-sm text-fg', selected && 'font-semibold')}>
+                          {repository.name}
+                        </span>
+                        <span className="block truncate text-xs text-fg-subtle">
+                          {repository.source === 'github' ? 'GitHub' : 'ZIP'}
+                          {ref ? ` · ${ref}` : ''} · {repository.file_count} files
+                        </span>
+                      </span>
+                    </button>
+                    <IconButton
+                      size="sm"
+                      aria-label={`Delete ${repository.name}`}
+                      icon={<Trash2 size={14} />}
+                      onClick={() => onDeleteRepository(repository)}
+                    />
+                  </li>
+                )
+              })}
+            </ul>
 
-              {filteredRepositories.map((repository) => (
-              <div
-                key={repository.id}
-                className={`repository-entry ${
-                  selectedRepositoryId === repository.id ? 'file-selected' : ''
-                }`}
-              >
-                <button
-                  type="button"
-                  className="repository-select-button"
-                  onClick={() => onSelectRepository(repository.id)}
-                >
-                  <FolderGit2 size={17} />
-                  <div>
-                    <strong>{repository.name}</strong>
-                    <small>
-                      {repository.source.toUpperCase()} · {repository.file_count} files
-                    </small>
-                  </div>
-                </button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start"
+              icon={<Upload size={14} aria-hidden="true" />}
+              aria-expanded={importOpen}
+              onClick={() => setImportOpen(!importOpen)}
+            >
+              Import repository
+            </Button>
 
-                <button
-                  type="button"
-                  className="repository-delete-button"
-                  title={`Delete ${repository.name}`}
-                  aria-label={`Delete ${repository.name}`}
-                  onClick={() => onDeleteRepository(repository)}
-                >
-                  <Trash2 size={15} />
-                </button>
-              </div>
-            ))}
-
-              <div className="sidebar-divider" />
-
-              <button
-                type="button"
-                className="manager-action"
-                aria-expanded={importOpen}
-                onClick={() => setImportOpen(!importOpen)}
-              >
-                <Upload size={15} aria-hidden="true" />
-                Import repository
-              </button>
-
-              {importOpen && (
+            {importOpen && (
+              <div className="px-1">
                 <ImportPanel
                   compact
                   importing={importing}
                   onImportLink={(url) => closeAfter(onImportGitHub(url))}
                   onImportZip={(file) => closeAfter(onImportZip(file))}
                 />
-              )}
-            </div>
-          )}
-        </section>
-      </div>
+              </div>
+            )}
+          </div>
+        </SidebarSection>
 
+        {selectedRepository && (
+          <SidebarSection title="Files" open={explorerOpen} onToggle={() => setExplorerOpen(!explorerOpen)}>
+            <FileExplorer
+              key={`${selectedRepositoryId ?? ''}:${explorerFocusPath ?? ''}`}
+              focusPath={explorerFocusPath}
+              files={files}
+              repositoryName={selectedRepository.name}
+              selectedFilePath={selectedFilePath}
+              onSelectFile={onSelectFile}
+            />
+          </SidebarSection>
+        )}
+      </div>
     </aside>
+  )
+}
+
+function SidebarSection({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  children: ReactNode
+}) {
+  const contentId = useId()
+
+  return (
+    <section>
+      <h2>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={contentId}
+          className="flex w-full items-center gap-1 rounded-sm px-2 py-1 text-xs font-semibold uppercase tracking-wide text-fg-subtle hover:text-fg"
+        >
+          {open ? <ChevronDown size={14} aria-hidden="true" /> : <ChevronRight size={14} aria-hidden="true" />}
+          {title}
+        </button>
+      </h2>
+      <div id={contentId} hidden={!open} className="mt-1">
+        {open && children}
+      </div>
+    </section>
   )
 }

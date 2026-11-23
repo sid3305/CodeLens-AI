@@ -1,59 +1,33 @@
+import { useEffect, useId, useState } from 'react'
+import { Files, GitMerge, Network, Package, RefreshCw, Search, Zap } from 'lucide-react'
+
+import { api, errorMessage } from '../../services/api'
+import type {
+  CircularDependency,
+  DependenciesAnalysisResponse,
+  ExternalDependency,
+  ModuleDependency,
+  Repository,
+} from '../../types'
 import {
-  FolderGit2,
-  RefreshCw,
-  AlertTriangle,
-  Code2,
-  Files,
-  CheckCircle2,
-  Search,
-  ChevronDown,
-  Link,
-  GitMerge,
-  Package,
-  Zap,
-  RotateCcw,
-  Layout,
-  Network,
-} from 'lucide-react'
+  Badge,
+  Button,
+  Card,
+  CardBody,
+  CardHeader,
+  EmptyState,
+  IconButton,
+  InlineMessage,
+  LoadingBlock,
+  SeverityBadge,
+  StatTile,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '../ui'
 
-import { Fragment, useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-
-import {
-  api,
-  errorMessage,
-  type DependenciesAnalysisResponse,
-  type CircularDependency,
-  type ExternalDependency,
-  type ModuleDependency,
-} from '../../services/api'
-import type { Repository } from '../../types'
-
-interface DependenciesPanelProps {
-  repository: Repository | null
-}
-
-function StatCard({
-  icon,
-  label,
-  value,
-  color,
-}: {
-  icon: ReactNode
-  label: string
-  value: string | number
-  color: string
-}) {
-  return (
-    <div className="stat-card">
-      <div className={`stat-icon ${color}`}>{icon}</div>
-      <div>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </div>
-    </div>
-  )
-}
+type TabId = 'overview' | 'circular' | 'external' | 'modules'
 
 /** Last path segment, for either separator style. */
 function baseName(path: string): string {
@@ -61,117 +35,211 @@ function baseName(path: string): string {
 }
 
 /** A module shown by file name, with the full path available on hover. */
-function ModuleName({ path, className }: { path: string; className?: string }) {
+function ModuleName({ path }: { path: string }) {
   return (
-    <span className={className} title={path}>
+    <span className="font-mono text-sm text-fg" title={path}>
       {baseName(path)}
     </span>
   )
 }
 
-function CircularDependencyCard({
-  cycle,
-}: {
-  cycle: CircularDependency
-}) {
+const severityLabel = (value: string) => value.charAt(0).toUpperCase() + value.slice(1)
+
+function CycleCard({ cycle }: { cycle: CircularDependency }) {
   return (
-    <article className="finding-card">
-      <div className="finding-card-header">
-        <div className="finding-heading">
-          <div className="finding-labels">
-            <span className={`severity-badge ${cycle.severity.toLowerCase()}`}>
-              {cycle.severity}
-            </span>
-            <span className="finding-category">Circular Import</span>
-          </div>
-          <h3>Circular Dependency ({cycle.cycle.length} modules)</h3>
-          <span className="finding-rule">{cycle.cycle_type}</span>
-        </div>
+    <article className="rounded-md border border-border bg-surface p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <SeverityBadge severity={severityLabel(cycle.severity)} />
+        <Badge>{cycle.cycle.length === 1 ? 'Self-import' : `${cycle.cycle.length} files`}</Badge>
       </div>
-
-      <p className="finding-description">{cycle.description}</p>
-
-      <div className="circular-cycle-visualization">
-        {cycle.cycle.map((mod, idx) => (
-          <div key={idx} className="cycle-step">
-            <ModuleName path={mod} className="cycle-module" />
-            {idx < cycle.cycle.length - 1 && (
-              <GitMerge size={16} className="cycle-arrow" />
-            )}
-          </div>
+      <p className="mt-2 text-sm break-words text-fg-muted">{cycle.description}</p>
+      <ol className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1" aria-label="Import order">
+        {[...cycle.cycle, cycle.cycle[0]].map((path, index) => (
+          <li key={`${path}-${index}`} className="flex items-center gap-2">
+            {index > 0 && <span aria-hidden="true" className="text-fg-subtle">→</span>}
+            <ModuleName path={path} />
+          </li>
         ))}
-        {/* Close the loop */}
-        <div className="cycle-step">
-          <ModuleName path={cycle.cycle[0]} className="cycle-module" />
-        </div>
-      </div>
-
-      <div className="finding-footer">
-        <span className="finding-duplicate">
-          {cycle.cycle.length} modules in cycle
-        </span>
-      </div>
+      </ol>
     </article>
   )
 }
 
-function ExternalDependencyCard({
-  dep,
-}: {
-  dep: ExternalDependency
-}) {
+function PackageRow({ dep }: { dep: ExternalDependency }) {
   return (
-    <article className={`dependency-card ${dep.is_dev_dependency ? 'dev-dependency' : ''}`}>
-      <div className="dependency-header">
-        <div className="dependency-name-row">
-          <Package size={18} className="dep-icon" />
-          <div>
-            <strong>{dep.name}</strong>
-            {dep.version && <span className="dep-version">{dep.version}</span>}
-            {dep.is_dev_dependency && (
-              <span className="dep-badge dev">Dev</span>
-            )}
-          </div>
-        </div>
-        <div className="dependency-meta">
-          <span className="dep-language">{dep.language}</span>
-          <span className="dep-import-count">{dep.import_count} imports</span>
-        </div>
-      </div>
-
-      <div className="dependency-sources">
-        {dep.source_files.slice(0, 3).map((file, idx) => (
-          <ModuleName key={idx} path={file} className="dep-source-file" />
-        ))}
-        {dep.source_files.length > 3 && (
-          <span className="dep-source-more">+{dep.source_files.length - 3} more</span>
-        )}
-      </div>
-    </article>
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border px-4 py-2.5 first:border-t-0">
+      <Package size={15} aria-hidden="true" className="shrink-0 text-fg-muted" />
+      <span className="min-w-0 font-mono text-sm font-medium break-all">{dep.name}</span>
+      {dep.version && <Badge>{dep.version}</Badge>}
+      {dep.is_dev_dependency && <Badge tone="warning">dev</Badge>}
+      {dep.declared === false && <Badge tone="neutral">not in a manifest</Badge>}
+      <span className="ml-auto text-sm text-fg-muted tabular-nums">
+        {dep.import_count} import{dep.import_count === 1 ? '' : 's'} · {dep.language}
+      </span>
+    </li>
   )
 }
 
-function ModuleDependencyList({
-  dependencies,
-}: {
-  dependencies: ModuleDependency[]
-}) {
+function ModuleRows({ dependencies }: { dependencies: ModuleDependency[] }) {
   return (
-    <div className="module-deps-list">
-      {dependencies.map((dep, idx) => (
-        <div key={idx} className="module-dep-row">
-          <ModuleName path={dep.source_module} className="module-link source" />
-          <span className="dep-arrow">→</span>
-          <ModuleName path={dep.target_module} className="module-link target" />
+    <ul className="rounded-md border border-border bg-surface">
+      {dependencies.map((dep) => (
+        <li
+          key={`${dep.source_module}->${dep.target_module}`}
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border px-4 py-2 first:border-t-0"
+        >
+          <ModuleName path={dep.source_module} />
+          <span aria-label="imports" className="text-fg-subtle">→</span>
+          <ModuleName path={dep.target_module} />
           {dep.imports.length > 0 && (
-            <span className="dep-imports">
+            <span className="min-w-0 truncate font-mono text-xs text-fg-subtle">
               {dep.imports.slice(0, 3).join(', ')}
-              {dep.imports.length > 3 && ` +${dep.imports.length - 3} more`}
+              {dep.imports.length > 3 && ` +${dep.imports.length - 3}`}
             </span>
           )}
-          <span className="dep-edge-count">×{dep.edge_count}</span>
-        </div>
+          <span className="ml-auto text-xs text-fg-muted tabular-nums">×{dep.edge_count}</span>
+        </li>
       ))}
+    </ul>
+  )
+}
+
+function SearchField({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const id = useId()
+  return (
+    <div className="relative">
+      <label htmlFor={id} className="sr-only">{label}</label>
+      <Search size={15} aria-hidden="true" className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-fg-subtle" />
+      <input
+        id={id}
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={label}
+        className="h-9 w-full rounded-sm border border-border-strong bg-surface pl-8 pr-2 text-base text-fg placeholder:text-fg-subtle"
+      />
+    </div>
+  )
+}
+
+function ExternalTab({ external }: { external: ExternalDependency[] }) {
+  const [filter, setFilter] = useState<'all' | 'prod' | 'dev'>('all')
+  const [query, setQuery] = useState('')
+  const filterId = useId()
+
+  const visible = [...external]
+    .filter((dep) => (filter === 'prod' ? !dep.is_dev_dependency : filter === 'dev' ? dep.is_dev_dependency : true))
+    .filter((dep) => dep.name.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => b.import_count - a.import_count)
+
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+        <SearchField label="Search packages" value={query} onChange={setQuery} />
+        <div>
+          <label htmlFor={filterId} className="sr-only">Dependency type</label>
+          <select
+            id={filterId}
+            value={filter}
+            onChange={(event) => setFilter(event.target.value as 'all' | 'prod' | 'dev')}
+            className="h-9 w-full rounded-sm border border-border-strong bg-surface px-2.5 text-base text-fg"
+          >
+            <option value="all">All packages</option>
+            <option value="prod">Production</option>
+            <option value="dev">Development</option>
+          </select>
+        </div>
+      </div>
+      {visible.length === 0 ? (
+        <p className="py-4 text-center text-base text-fg-muted">No packages match your filters.</p>
+      ) : (
+        <ul className="rounded-md border border-border bg-surface">
+          {visible.map((dep) => <PackageRow key={dep.name} dep={dep} />)}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function ModulesTab({ modules }: { modules: ModuleDependency[] }) {
+  const [query, setQuery] = useState('')
+  const needle = query.toLowerCase()
+  const visible = [...modules]
+    .filter((dep) =>
+      [dep.source_module, dep.target_module, ...dep.imports].some((text) => text.toLowerCase().includes(needle)),
+    )
+    .sort((a, b) => b.edge_count - a.edge_count)
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0 flex-1"><SearchField label="Search modules or imports" value={query} onChange={setQuery} /></div>
+        <p className="text-sm text-fg-muted" role="status">{visible.length} of {modules.length} dependencies</p>
+      </div>
+      {visible.length === 0
+        ? <p className="py-4 text-center text-base text-fg-muted">No module dependencies match your search.</p>
+        : <ModuleRows dependencies={visible} />}
+    </div>
+  )
+}
+
+function OverviewTab({ analysis, onShowCircular }: { analysis: DependenciesAnalysisResponse; onShowCircular: () => void }) {
+  const topCycles = analysis.circular_dependencies.slice(0, 3)
+  const topPackages = [...analysis.external_dependencies].sort((a, b) => b.import_count - a.import_count).slice(0, 5)
+  const topModules = [...analysis.module_dependencies].sort((a, b) => b.edge_count - a.edge_count).slice(0, 10)
+
+  return (
+    <div className="grid gap-5 lg:grid-cols-2">
+      <section aria-labelledby="overview-cycles" className="space-y-2">
+        <h3 id="overview-cycles" className="flex items-center gap-2 font-semibold">
+          <GitMerge size={15} aria-hidden="true" /> Circular dependencies
+          <Badge>{analysis.circular_dependencies.length}</Badge>
+        </h3>
+        {topCycles.length === 0 ? (
+          <p className="text-base text-fg-muted">No circular imports.</p>
+        ) : (
+          <>
+            <ul className="space-y-2">
+              {topCycles.map((cycle, index) => (
+                <li key={index} className="flex flex-wrap items-center gap-2 rounded-sm bg-surface-2 px-3 py-2">
+                  <SeverityBadge severity={severityLabel(cycle.severity)} />
+                  {cycle.cycle.map((path, i) => (
+                    <span key={`${path}-${i}`} className="flex items-center gap-2">
+                      {i > 0 && <span aria-hidden="true" className="text-fg-subtle">→</span>}
+                      <ModuleName path={path} />
+                    </span>
+                  ))}
+                </li>
+              ))}
+            </ul>
+            {analysis.circular_dependencies.length > 3 && (
+              <Button size="sm" variant="ghost" onClick={onShowCircular}>
+                View all {analysis.circular_dependencies.length} circular dependencies
+              </Button>
+            )}
+          </>
+        )}
+      </section>
+
+      <section aria-labelledby="overview-packages" className="space-y-2">
+        <h3 id="overview-packages" className="flex items-center gap-2 font-semibold">
+          <Package size={15} aria-hidden="true" /> Top external packages
+          <Badge>{analysis.external_dependencies.length}</Badge>
+        </h3>
+        {topPackages.length === 0
+          ? <p className="text-base text-fg-muted">No external packages.</p>
+          : <ul className="rounded-md border border-border bg-surface">{topPackages.map((dep) => <PackageRow key={dep.name} dep={dep} />)}</ul>}
+      </section>
+
+      <section aria-labelledby="overview-modules" className="space-y-2 lg:col-span-2">
+        <h3 id="overview-modules" className="flex items-center gap-2 font-semibold">
+          <Network size={15} aria-hidden="true" /> Most connected modules
+          <Badge>{analysis.module_dependencies.length}</Badge>
+        </h3>
+        {topModules.length === 0
+          ? <p className="text-base text-fg-muted">No internal module dependencies.</p>
+          : <ModuleRows dependencies={topModules} />}
+      </section>
     </div>
   )
 }
@@ -184,10 +252,8 @@ interface LoadedAnalysis {
   error: string | null
 }
 
-export default function DependenciesPanel({
-  repository,
-}: DependenciesPanelProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'circular' | 'external' | 'modules'>('overview')
+export default function DependenciesPanel({ repository }: { repository: Repository | null }) {
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [generation, setGeneration] = useState(0)
   const [loaded, setLoaded] = useState<LoadedAnalysis | null>(null)
 
@@ -210,9 +276,7 @@ export default function DependenciesPanel({
 
     request.then(
       (data) => {
-        if (!cancelled) {
-          setLoaded({ repoId: repositoryId, generation: requested, data, error: null })
-        }
+        if (!cancelled) setLoaded({ repoId: repositoryId, generation: requested, data, error: null })
       },
       (err: unknown) => {
         if (!cancelled) {
@@ -237,408 +301,106 @@ export default function DependenciesPanel({
   const error = current?.error ?? null
   const loading = current === null || current.generation !== generation
 
-  const handleRefresh = () => {
-    setGeneration((value) => value + 1)
-  }
+  const refresh = () => setGeneration((value) => value + 1)
 
   if (!repository) {
     return (
-      <section className="content-section">
-        <div className="empty-content repository-welcome">
-          <FolderGit2 size={34} />
-          <h3>No repository selected</h3>
-          <p>Import a repository to analyze its dependencies.</p>
-        </div>
-      </section>
+      <Card>
+        <EmptyState title="No repository selected" description="Import a repository to analyze its dependencies." />
+      </Card>
     )
   }
 
-  const stats = analysis?.stats
-
   return (
-    <section className="content-section">
-      <div className="section-title-row">
-        <div>
-          <h2>
-            <Link size={22} /> Dependencies Analysis
-          </h2>
-          <p>Module imports, circular dependencies, and external packages</p>
-        </div>
-        <div className="section-actions">
-          <button
-            className="icon-button"
-            onClick={handleRefresh}
-            disabled={loading}
-            title="Refresh dependency analysis"
+    <Card aria-labelledby="dependencies-heading">
+      <CardHeader
+        titleId="dependencies-heading"
+        title="Dependency analysis"
+        description="Imports between files, circular dependencies and external packages"
+        actions={
+          <IconButton
             aria-label="Refresh dependency analysis"
-          >
-            <RefreshCw size={16} className={loading ? 'spin' : ''} />
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="error-banner" role="alert">
-          <AlertTriangle size={16} />
-          <span>{error}</span>
-          <button
-            type="button"
-            className="icon-button small"
-            onClick={handleRefresh}
-            aria-label="Retry dependency analysis"
-            title="Retry"
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
-      )}
-
-      {/* Stats Overview */}
-      {analysis && (
-        <div className="overview-stats dependencies-stats">
-          <StatCard
-            icon={<Files />}
-            label="Modules"
-            value={analysis.total_internal_modules}
-            color="blue"
+            icon={<RefreshCw size={16} className={loading ? 'animate-spin' : undefined} />}
+            disabled={loading}
+            onClick={refresh}
           />
-          <StatCard
-            icon={<Package />}
-            label="External Deps"
-            value={analysis.total_external_dependencies}
-            color="purple"
-          />
-          <StatCard
-            icon={<GitMerge />}
-            label="Circular Deps"
-            value={stats?.circular_import_count ?? 0}
-            color={stats && stats.circular_import_count > 0 ? 'orange' : 'teal'}
-          />
-          <StatCard
-            icon={<Zap />}
-            label="Import Edges"
-            value={stats?.total_imports ?? 0}
-            color="blue"
-          />
-        </div>
-      )}
-
-      {/* Tab Navigation */}
-      <div className="dependencies-tabs">
-        <button
-          className={`tab-button ${activeTab === 'overview' ? 'active' : ''}`}
-          onClick={() => setActiveTab('overview')}
-        >
-          <Layout size={16} /> Overview
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'circular' ? 'active' : ''}`}
-          onClick={() => setActiveTab('circular')}
-        >
-          <GitMerge size={16} />
-          Circular ({analysis?.circular_dependencies.length ?? 0})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'external' ? 'active' : ''}`}
-          onClick={() => setActiveTab('external')}
-        >
-          <Package size={16} />
-          External ({analysis?.external_dependencies.length ?? 0})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'modules' ? 'active' : ''}`}
-          onClick={() => setActiveTab('modules')}
-        >
-          <Network size={16} />
-          Modules ({analysis?.module_dependencies.length ?? 0})
-        </button>
-      </div>
-
-      {/* Tab Content */}
-      <div className="tab-content">
-        {activeTab === 'overview' && analysis && (
-          <DependenciesOverview
-            analysis={analysis}
-            onShowCircular={() => setActiveTab('circular')}
-          />
-        )}
-
-        {activeTab === 'circular' && analysis && (
-          <CircularDependenciesTab circular={analysis.circular_dependencies} />
-        )}
-
-        {activeTab === 'external' && analysis && (
-          <ExternalDependenciesTab external={analysis.external_dependencies} />
-        )}
-
-        {activeTab === 'modules' && analysis && (
-          <ModuleDependenciesTab modules={analysis.module_dependencies} />
-        )}
-
-      </div>
-
-      {/* Language Breakdown */}
-      {analysis && (
-        <details className="analysis-details">
-          <summary>
-            <div>
-              <strong>Language Breakdown</strong>
-              <span>Files and dependencies per language</span>
-            </div>
-            <ChevronDown size={17} className="details-chevron" />
-          </summary>
-          <div className="analysis-details-content">
-            <div className="language-breakdown-table">
-              {Object.entries(analysis.language_breakdown).map(([lang, stats]) => (
-                <div key={lang} className="language-row">
-                  <div className="lang-info">
-                    <Code2 size={16} className={`lang-icon ${lang}`} />
-                    <strong>{lang}</strong>
-                  </div>
-                  <div className="lang-stats">
-                    <span>{stats.files} files</span>
-                    <span>{stats.internal_deps} internal deps</span>
-                    <span>{stats.external_deps} external deps</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+        }
+      />
+      <CardBody className="space-y-5">
+        {error && (
+          <div className="flex flex-wrap items-center gap-2">
+            <InlineMessage tone="error">{error}</InlineMessage>
+            <Button size="sm" onClick={refresh} aria-label="Retry dependency analysis">Retry</Button>
           </div>
-        </details>
-      )}
-    </section>
-  )
-}
+        )}
 
-// Sub-components for each tab
+        {!analysis && loading && <LoadingBlock label="Analyzing dependencies" lines={4} />}
 
-function DependenciesOverview({
-  analysis,
-  onShowCircular,
-}: {
-  analysis: DependenciesAnalysisResponse
-  onShowCircular: () => void
-}) {
-  const topCircular = analysis.circular_dependencies.slice(0, 3)
-  const topExternal = [...analysis.external_dependencies]
-    .sort((a, b) => b.import_count - a.import_count)
-    .slice(0, 5)
-  const topModules = [...analysis.module_dependencies]
-    .sort((a, b) => b.edge_count - a.edge_count)
-    .slice(0, 10)
+        {analysis && (
+          <>
+            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
+              <StatTile icon={<Files size={18} />} label="Source files" value={analysis.total_internal_modules} />
+              <StatTile icon={<Package size={18} />} label="External packages" value={analysis.total_external_dependencies} />
+              <StatTile icon={<GitMerge size={18} />} label="Import cycles" value={analysis.stats.circular_import_count} />
+              <StatTile icon={<Zap size={18} />} label="Import statements" value={analysis.stats.total_imports} />
+            </div>
 
-  return (
-    <div className="dependencies-overview">
-      {/* Circular Dependencies Summary */}
-      <div className="overview-section">
-        <h3>
-          <GitMerge size={18} /> Circular Dependencies
-          <span className="section-count">{analysis.circular_dependencies.length} found</span>
-        </h3>
-        {topCircular.length > 0 ? (
-          <div className="circular-preview">
-            {topCircular.map((cycle, idx) => (
-              <div key={idx} className="circular-preview-item">
-                <span className={`severity-badge ${cycle.severity.toLowerCase()}`}>
-                  {cycle.severity}
-                </span>
-                <span className="cycle-path">
-                  {cycle.cycle.map((m, i) => (
-                    <Fragment key={`${m}-${i}`}>
-                      <ModuleName path={m} className="cycle-module-inline" />
-                      {i < cycle.cycle.length - 1 && <span> → </span>}
-                    </Fragment>
+            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabId)}>
+              <TabsList label="Dependency views">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="circular">Circular ({analysis.circular_dependencies.length})</TabsTrigger>
+                <TabsTrigger value="external">External ({analysis.external_dependencies.length})</TabsTrigger>
+                <TabsTrigger value="modules">Modules ({analysis.module_dependencies.length})</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview">
+                <OverviewTab analysis={analysis} onShowCircular={() => setActiveTab('circular')} />
+              </TabsContent>
+              <TabsContent value="circular">
+                {analysis.circular_dependencies.length === 0 ? (
+                  <EmptyState headingLevel={3} title="No circular imports" description="No file imports itself through a chain of other files." />
+                ) : (
+                  <ul className="space-y-3">
+                    {analysis.circular_dependencies.map((cycle, index) => (
+                      <li key={index}><CycleCard cycle={cycle} /></li>
+                    ))}
+                  </ul>
+                )}
+              </TabsContent>
+              <TabsContent value="external">
+                <ExternalTab external={analysis.external_dependencies} />
+              </TabsContent>
+              <TabsContent value="modules">
+                <ModulesTab modules={analysis.module_dependencies} />
+              </TabsContent>
+            </Tabs>
+
+            {Object.keys(analysis.language_breakdown).length > 0 && (
+              <table className="w-full text-left text-sm">
+                <caption className="pb-2 text-left font-semibold">Languages</caption>
+                <thead className="text-fg-muted">
+                  <tr>
+                    <th scope="col" className="py-1.5 font-medium">Language</th>
+                    <th scope="col" className="py-1.5 text-right font-medium">Files</th>
+                    <th scope="col" className="py-1.5 text-right font-medium">Internal imports</th>
+                    <th scope="col" className="py-1.5 text-right font-medium">Packages</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(analysis.language_breakdown).map(([language, stats]) => (
+                    <tr key={language} className="border-t border-border">
+                      <th scope="row" className="py-1.5 font-medium capitalize">{language}</th>
+                      <td className="py-1.5 text-right tabular-nums">{stats.files}</td>
+                      <td className="py-1.5 text-right tabular-nums">{stats.internal_deps}</td>
+                      <td className="py-1.5 text-right tabular-nums">{stats.external_deps}</td>
+                    </tr>
                   ))}
-                </span>
-              </div>
-            ))}
-            {analysis.circular_dependencies.length > 3 && (
-              <button
-                type="button"
-                className="secondary-button small"
-                onClick={onShowCircular}
-              >
-                View all {analysis.circular_dependencies.length} circular dependencies
-              </button>
+                </tbody>
+              </table>
             )}
-          </div>
-        ) : (
-          <div className="empty-content compact-empty">
-            <CheckCircle2 size={20} />
-            <p>No circular dependencies detected!</p>
-          </div>
+          </>
         )}
-      </div>
-
-      {/* Top External Dependencies */}
-      <div className="overview-section">
-        <h3>
-          <Package size={18} /> Top External Dependencies
-          <span className="section-count">{analysis.external_dependencies.length} packages</span>
-        </h3>
-        {topExternal.length > 0 ? (
-          <div className="external-preview">
-            {topExternal.map((dep) => (
-              <div key={dep.name} className="external-preview-item">
-                <Package size={16} className="dep-icon" />
-                <div className="dep-info">
-                  <strong>{dep.name}</strong>
-                  <span>{dep.import_count} imports across {dep.source_files.length} files</span>
-                </div>
-                {dep.version && <span className="dep-version">{dep.version}</span>}
-                {dep.is_dev_dependency && <span className="dep-badge dev">Dev</span>}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="empty-content compact-empty">
-            <Package size={20} />
-            <p>No external dependencies found</p>
-          </div>
-        )}
-      </div>
-
-      {/* Most Connected Modules */}
-      <div className="overview-section">
-        <h3>
-          <Network size={18} /> Most Connected Modules
-          <span className="section-count">{analysis.module_dependencies.length} relationships</span>
-        </h3>
-        {topModules.length > 0 ? (
-          <ModuleDependencyList dependencies={topModules} />
-        ) : (
-          <div className="empty-content compact-empty">
-            <Network size={20} />
-            <p>No module dependencies found</p>
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function CircularDependenciesTab({
-  circular,
-}: {
-  circular: CircularDependency[]
-}) {
-  if (circular.length === 0) {
-    return (
-      <div className="empty-content">
-        <CheckCircle2 size={32} />
-        <h3>No Circular Dependencies</h3>
-        <p>Your codebase has no circular import chains. Great job!</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="circular-dependencies-list">
-      {circular.map((cycle, idx) => (
-        <CircularDependencyCard key={idx} cycle={cycle} />
-      ))}
-    </div>
-  )
-}
-
-function ExternalDependenciesTab({
-  external,
-}: {
-  external: ExternalDependency[]
-}) {
-  const [filter, setFilter] = useState<'all' | 'prod' | 'dev'>('all')
-  const [search, setSearch] = useState('')
-
-  const filtered = external
-    .filter((dep) => {
-      if (filter === 'prod' && dep.is_dev_dependency) return false
-      if (filter === 'dev' && !dep.is_dev_dependency) return false
-      return true
-    })
-    .filter((dep) =>
-      dep.name.toLowerCase().includes(search.toLowerCase())
-    )
-    .sort((a, b) => b.import_count - a.import_count)
-
-  return (
-    <div className="external-dependencies-tab">
-      <div className="external-filters">
-        <div className="filter-group">
-          <Search size={16} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search packages..."
-            className="filter-input"
-          />
-        </div>
-        <div className="filter-group">
-          <select value={filter} onChange={(e) => setFilter((e.target as HTMLSelectElement).value as 'all' | 'prod' | 'dev')} className="filter-select">
-            <option value="all">All</option>
-            <option value="prod">Production</option>
-            <option value="dev">Development</option>
-          </select>
-        </div>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="empty-content compact-empty">
-          <Package size={20} />
-          <p>No external dependencies match your filters</p>
-        </div>
-      ) : (
-        <div className="external-deps-grid">
-          {filtered.map((dep) => (
-            <ExternalDependencyCard key={dep.name} dep={dep} />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ModuleDependenciesTab({
-  modules,
-}: {
-  modules: ModuleDependency[]
-}) {
-  const [search, setSearch] = useState('')
-
-  const filtered = modules
-    .filter((dep) =>
-      dep.source_module.toLowerCase().includes(search.toLowerCase()) ||
-      dep.target_module.toLowerCase().includes(search.toLowerCase()) ||
-      dep.imports.some((imp) => imp.toLowerCase().includes(search.toLowerCase()))
-    )
-    .sort((a, b) => b.edge_count - a.edge_count)
-
-  return (
-    <div className="module-dependencies-tab">
-      <div className="module-filters">
-        <div className="filter-group">
-          <Search size={16} />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search modules or imports..."
-            className="filter-input"
-          />
-        </div>
-        <span className="result-count">
-          {filtered.length} of {modules.length} dependencies
-        </span>
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="empty-content compact-empty">
-          <Network size={20} />
-          <p>No module dependencies match your search</p>
-        </div>
-      ) : (
-        <ModuleDependencyList dependencies={filtered} />
-      )}
-    </div>
+      </CardBody>
+    </Card>
   )
 }

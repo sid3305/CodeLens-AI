@@ -148,5 +148,5 @@ export default function MarkdownContent({
     )
   }
 
-  return <div className="markdown-content">{elements}</div>
+  return <div className="prose-content">{elements}</div>
 }

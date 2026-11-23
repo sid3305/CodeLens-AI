@@ -1,187 +1,202 @@
+@import 'tailwindcss';
+@import './styles/tokens.css';
 
-@import "tailwindcss";
+/* Tokens exposed as Tailwind utilities (bg-surface, text-fg-muted, ...).
+   `inline` keeps the var() references so the theme switch applies live. */
+@theme inline {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'Cascadia Code', Consolas, monospace;
 
-:root {
-  font-family: Inter, "Segoe UI", sans-serif;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
+  --color-bg: var(--cl-bg);
+  --color-surface: var(--cl-surface);
+  --color-surface-2: var(--cl-surface-2);
+  --color-surface-hover: var(--cl-surface-hover);
+  --color-border: var(--cl-border);
+  --color-border-strong: var(--cl-border-strong);
+  --color-fg: var(--cl-fg);
+  --color-fg-muted: var(--cl-fg-muted);
+  --color-fg-subtle: var(--cl-fg-subtle);
+  --color-accent: var(--cl-accent);
+  --color-accent-hover: var(--cl-accent-hover);
+  --color-accent-soft: var(--cl-accent-soft);
+  --color-accent-text: var(--cl-accent-text);
+  --color-on-accent: var(--cl-on-accent);
+  --color-focus: var(--cl-focus);
+  --color-danger: var(--cl-danger);
+  --color-danger-soft: var(--cl-danger-soft);
+  --color-success: var(--cl-success);
+  --color-success-soft: var(--cl-success-soft);
+  --color-warning: var(--cl-warning);
+  --color-warning-soft: var(--cl-warning-soft);
+  --color-sev-critical: var(--cl-sev-critical);
+  --color-sev-critical-soft: var(--cl-sev-critical-soft);
+  --color-sev-high: var(--cl-sev-high);
+  --color-sev-high-soft: var(--cl-sev-high-soft);
+  --color-sev-medium: var(--cl-sev-medium);
+  --color-sev-medium-soft: var(--cl-sev-medium-soft);
+  --color-sev-low: var(--cl-sev-low);
+  --color-sev-low-soft: var(--cl-sev-low-soft);
+  --color-sev-info: var(--cl-sev-info);
+  --color-sev-info-soft: var(--cl-sev-info-soft);
+  --color-code-bg: var(--cl-code-bg);
+  --color-code-highlight: var(--cl-code-highlight);
+
+  --radius-sm: var(--cl-radius-sm);
+  --radius-md: var(--cl-radius-md);
+
+  --shadow-sm: var(--cl-shadow-sm);
+  --shadow-md: var(--cl-shadow-md);
+  --shadow-lg: var(--cl-shadow-lg);
+
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 13px;
+  --text-sm--line-height: 20px;
+  --text-base: 14px;
+  --text-base--line-height: 22px;
+  --text-md: 16px;
+  --text-md--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 26px;
+  --text-xl: 22px;
+  --text-xl--line-height: 30px;
+  --text-2xl: 28px;
+  --text-2xl--line-height: 36px;
+
+  --animate-spin: spin 0.9s linear infinite;
 }
 
-* {
-  box-sizing: border-box;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb, #C5C9D2) transparent;
+@layer base {
+  html {
+    background: var(--cl-bg);
+    color: var(--cl-fg);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--cl-bg);
+  }
+
+  * {
+    border-color: var(--cl-border);
+  }
+
+  /* One visible focus style everywhere, keyboard only. */
+  :focus-visible {
+    outline: 2px solid var(--cl-focus);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--cl-accent) 30%, transparent);
+  }
+
+  code,
+  pre,
+  kbd {
+    font-family: var(--font-mono);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
 
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
+@layer components {
+  /* Source code with line numbers (file preview, finding context). */
+  .code-lines {
+    margin: 0;
+    padding: 8px 0;
+    overflow: auto;
+    background: var(--cl-code-bg);
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    line-height: 20px;
+    tab-size: 4;
+  }
 
-*::-webkit-scrollbar-thumb {
-  background: var(--scroll-thumb, #C5C9D2);
-  border-radius: 10px;
-}
+  .code-line {
+    display: grid;
+    grid-template-columns: 4.5em 1fr;
+    min-width: max-content;
+  }
 
-html,
-body,
-#root {
-  width: 100%;
-  min-width: 320px;
-  height: 100%;
-  margin: 0;
-}
+  .code-line > span:first-child {
+    padding-right: 12px;
+    text-align: right;
+    color: var(--cl-fg-subtle);
+    user-select: none;
+  }
 
-body {
-  overflow: hidden;
-}
+  .code-line > code {
+    padding-right: 16px;
+    white-space: pre;
+  }
 
-button,
-input,
-textarea {
-  font: inherit;
-}
+  .code-line[data-highlighted='true'] {
+    background: var(--cl-code-highlight);
+    box-shadow: inset 3px 0 0 var(--cl-accent);
+  }
 
-button {
-  cursor: pointer;
-}
+  /* Model-written Markdown. */
+  .prose-content {
+    font-size: 14px;
+    line-height: 22px;
+    color: var(--cl-fg);
+  }
 
-button:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--accent-blue);
-  outline-offset: 2px;
-}
+  .prose-content h2,
+  .prose-content h3,
+  .prose-content h4 {
+    margin: 16px 0 6px;
+    font-weight: 600;
+  }
 
-::selection {
-  background: var(--selection-bg);
-}
+  .prose-content h2 { font-size: 16px; }
+  .prose-content h3 { font-size: 15px; }
+  .prose-content h4 { font-size: 14px; }
 
-/* =====================================
-   LIGHT MODE — DEFAULT
-===================================== */
+  .prose-content p { margin: 0 0 10px; }
 
-.app-shell {
-  color-scheme: light;
+  .prose-content ul,
+  .prose-content ol {
+    margin: 0 0 10px;
+    padding-left: 20px;
+  }
 
-  --app-bg: #F7F6F2;
-  --sidebar-bg: #F0EFEA;
-  --panel-bg: #FFFFFF;
-  --surface: #F5F5F8;
-  --surface-hover: #ECEEF5;
-  --border: #E1E2E8;
+  .prose-content ul { list-style: disc; }
+  .prose-content ol { list-style: decimal; }
 
-  --text-primary: #252A36;
-  --text-secondary: #606979;
-  --text-muted: #89909D;
+  .prose-content code {
+    padding: 1px 5px;
+    border-radius: 4px;
+    background: var(--cl-surface-2);
+    font-size: 12.5px;
+  }
 
-  --accent-blue: #536DD1;
-  --accent-teal: #329A7C;
-  --accent-orange: #CE873C;
-  --accent-blue-rgb: 83, 109, 209;
-  --accent-contrast: #FFFFFF;
+  .prose-content pre {
+    margin: 0 0 10px;
+    padding: 10px 12px;
+    overflow: auto;
+    border-radius: var(--cl-radius-sm);
+    background: var(--cl-code-bg);
+  }
 
-  --code-bg: #F3F4F7;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
-
-  --scroll-thumb: #C5C9D2;
-  --selection-bg: #6478C944;
-
-  /* Workspace-specific colours */
-  --overview-color: #536DD1;
-  --overview-bg: #E8EDFF;
-
-  --architecture-color: #8962C9;
-  --architecture-bg: #F0E9FF;
-
-  --dataflow-color: #329A7C;
-  --dataflow-bg: #E1F5EF;
-
-  --dependencies-color: #428CB9;
-  --dependencies-bg: #E4F2FC;
-
-  --issues-color: #D66D55;
-  --issues-bg: #FCE9E5;
-
-  --performance-color: #CE873C;
-  --performance-bg: #FFF0DD;
-
-  --documentation-color: #398DA8;
-  --documentation-bg: #E2F3F7;
-
-  --ai-color: #BD6594;
-  --ai-bg: #F9EAF2;
-
-  --reports-color: #6475B9;
-  --reports-bg: #E9ECFA;
-
-  --security-color: #31936C;
-  --security-bg: #E2F4E9;
-
-  background: var(--app-bg);
-}
-
-/* =====================================
-   DARK MODE
-===================================== */
-
-.app-shell[data-theme="dark"] {
-  color-scheme: dark;
-
-  --app-bg: #202633;
-  --sidebar-bg: #252D3C;
-  --panel-bg: #293344;
-  --surface: #323E51;
-  --surface-hover: #3D4B61;
-  --border: #414C5F;
-
-  --text-primary: #F0F1F8;
-  --text-secondary: #B8C1D2;
-  --text-muted: #8995A9;
-
-  --accent-blue: #A8B8FF;
-  --accent-teal: #83D9B8;
-  --accent-orange: #F3BD7C;
-  --accent-blue-rgb: 168, 184, 255;
-  --accent-contrast: #1A2140;
-
-  --code-bg: #1E2533;
-
-  --scroll-thumb: #566176;
-  --selection-bg: #A8B8FF55;
-
-  --overview-color: #A8B8FF;
-  --overview-bg: #303B60;
-
-  --architecture-color: #C4A2F4;
-  --architecture-bg: #403354;
-
-  --dataflow-color: #83D9B8;
-  --dataflow-bg: #24463F;
-
-  --dependencies-color: #8CC9EB;
-  --dependencies-bg: #263F54;
-
-  --issues-color: #F19B87;
-  --issues-bg: #4B302F;
-
-  --performance-color: #F3BD7C;
-  --performance-bg: #4D3B2B;
-
-  --documentation-color: #82C9DD;
-  --documentation-bg: #24424D;
-
-  --ai-color: #F0A6C4;
-  --ai-bg: #493344;
-
-  --reports-color: #AAB9F1;
-  --reports-bg: #333D60;
-
-  --security-color: #83D9A8;
-  --security-bg: #264638;
-}
-
-.app-shell {
-  color: var(--text-primary);
+  .prose-content pre code {
+    padding: 0;
+    background: none;
+  }
 }

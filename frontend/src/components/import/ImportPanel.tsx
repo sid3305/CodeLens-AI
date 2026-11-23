@@ -4,6 +4,7 @@ import { Link2, Upload } from 'lucide-react'
 
 import { api, errorMessage } from '../../services/api'
 import type { RepositoryLinkPreview } from '../../types'
+import { Button, InlineMessage, buttonClasses, cn } from '../ui'
 
 const VALIDATE_DELAY_MS = 300
 
@@ -108,16 +109,16 @@ export default function ImportPanel({
     <div
       role="group"
       aria-label="Import a repository"
-      className={`import-panel${compact ? ' compact' : ''}`}
+      className={cn('grid w-full gap-3 text-left', !compact && 'mx-auto max-w-xl')}
       onDragOver={(event) => event.preventDefault()}
       onDrop={onDrop}
     >
-      <form className="import-link-form" onSubmit={submit} noValidate>
-        <label htmlFor={inputId} className="import-label">
-          <Link2 size={15} aria-hidden="true" />
+      <form className="grid gap-1.5" onSubmit={submit} noValidate>
+        <label htmlFor={inputId} className="inline-flex items-center gap-1.5 text-sm font-medium text-fg">
+          <Link2 size={14} aria-hidden="true" />
           Repository link
         </label>
-        <div className="import-link-row">
+        <div className={cn('flex gap-2', compact && 'flex-col')}>
           <input
             id={inputId}
             type="text"
@@ -126,48 +127,56 @@ export default function ImportPanel({
             spellCheck={false}
             value={link}
             onChange={(event) => setLink(event.target.value)}
-            placeholder="https://github.com/owner/repository or owner/repo"
+            placeholder={compact ? 'owner/repo or GitHub link' : 'https://github.com/owner/repository or owner/repo'}
             aria-invalid={linkError ? true : undefined}
             aria-describedby={statusId}
             disabled={importing}
+            className={cn(
+              'h-9 min-w-0 flex-1 rounded-sm border bg-surface px-2.5 text-base text-fg placeholder:text-fg-subtle',
+              linkError ? 'border-danger' : 'border-border-strong',
+            )}
           />
-          <button type="submit" className="primary-button" disabled={!preview || importing}>
+          <Button type="submit" variant="primary" disabled={!preview} loading={importing}>
             {importing ? 'Importing…' : 'Import'}
-          </button>
+          </Button>
         </div>
         <p
           id={statusId}
-          className={`import-status${linkError ? ' error' : ''}`}
+          className={cn('text-sm break-words', linkError ? 'text-danger' : preview ? 'font-medium text-fg' : 'text-fg-muted')}
           aria-live="polite"
         >
           {checking
             ? 'Checking link…'
             : preview
               ? `Will import ${preview.display}`
-              : linkError ?? 'Public GitHub repositories: any repository, branch, folder or commit link.'}
+              : linkError ?? 'Any public GitHub repository, branch, folder or commit link.'}
         </p>
       </form>
 
-      <div className="import-zip-row">
-        <span className="import-or">or</span>
+      <div className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
+        <span>or</span>
         <input
           id={zipId}
           type="file"
           accept=".zip,application/zip,application/x-zip-compressed"
-          className="sr-only"
+          className="peer sr-only"
           onChange={(event) => void onZipChosen(event)}
           disabled={importing}
         />
-        <label htmlFor={zipId} className="secondary-button">
-          <Upload size={15} aria-hidden="true" />
+        <label
+          htmlFor={zipId}
+          className={cn(
+            buttonClasses('secondary', 'sm'),
+            'cursor-pointer peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-focus',
+          )}
+        >
+          <Upload size={14} aria-hidden="true" />
           Choose ZIP archive
         </label>
-        <span className="import-hint">You can also drag an archive onto this panel.</span>
+        {!compact && <span>or drag an archive onto this panel.</span>}
       </div>
 
-      {dropError && (
-        <p className="inline-error" role="alert">{dropError}</p>
-      )}
+      {dropError && <InlineMessage tone="error">{dropError}</InlineMessage>}
     </div>
   )
 }

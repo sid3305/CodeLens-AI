@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { renderWithProviders } from '../../test/render'
 
 import AppShell from './AppShell'
 import { api } from '../../services/api'
@@ -55,10 +56,11 @@ describe('AppShell analysis notice (A3 / BUG-19)', () => {
     })
     const user = userEvent.setup()
 
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
     await user.click(await screen.findByRole('button', { name: /run analysis/i }))
 
-    expect(await screen.findByText(/not run: semgrep/i)).toBeInTheDocument()
+    // Shown in the notification and in the Overview's findings card.
+    expect((await screen.findAllByText(/not run: semgrep/i)).length).toBeGreaterThan(0)
     expect(screen.queryByText(/completed successfully/i)).not.toBeInTheDocument()
   })
 })
@@ -102,7 +104,7 @@ describe('AppShell file selection (D5)', () => {
         : Promise.resolve({ repository_id: 'r1', path, content: 'content of b' }),
     )
     const user = userEvent.setup()
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
 
     await user.click(await screen.findByRole('button', { name: 'a.py' }))
     await user.click(screen.getByRole('button', { name: 'b.py' }))
@@ -121,7 +123,7 @@ describe('AppShell file selection (D5)', () => {
       content: `content of ${path}`,
     }))
     const user = userEvent.setup()
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
 
     await user.click(await screen.findByRole('button', { name: 'a.py' }))
     await screen.findByText('content of a.py')
@@ -136,7 +138,7 @@ describe('AppShell placeholders (A10 / BUG-10)', () => {
   it('does not show the unimplemented AI chat panel', async () => {
     mockedApi.health.mockResolvedValue({ status: 'healthy' })
 
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
     await screen.findByText(/api connected/i)
 
     expect(screen.queryByPlaceholderText(/ask about your repository/i)).not.toBeInTheDocument()
@@ -149,7 +151,7 @@ describe('AppShell API status (A3 / BUG-18)', () => {
     mockedApi.health.mockRejectedValue(new TypeError('Failed to fetch'))
     mockedApi.getRepositories.mockRejectedValue(new TypeError('Failed to fetch'))
 
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
 
     expect(await screen.findByText(/api unreachable/i)).toBeInTheDocument()
     expect(screen.queryByText(/api connected/i)).not.toBeInTheDocument()
@@ -158,7 +160,7 @@ describe('AppShell API status (A3 / BUG-18)', () => {
   it('reports the API as connected when the health check succeeds', async () => {
     mockedApi.health.mockResolvedValue({ status: 'healthy' })
 
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
 
     expect(await screen.findByText(/api connected/i)).toBeInTheDocument()
   })
@@ -193,7 +195,7 @@ describe('AppShell link import focus (X1)', () => {
       return { ...imported, focus_path: focus }
     })
     const user = userEvent.setup()
-    render(<AppShell />)
+    renderWithProviders(<AppShell />)
     const input = await screen.findByLabelText(/repository link/i)
     await user.type(input, 'https://github.com/o/r/tree/main/src')
     await screen.findByText(/will import/i)
