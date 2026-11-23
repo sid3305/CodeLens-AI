@@ -156,7 +156,8 @@ export function useGenerateSummary(repoId: string) {
 export function useExplainFile(repoId: string) {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (path: string) => api.explainFile(repoId, path),
+    // With an answer already shown, the button is Regenerate: ask again (force).
+    mutationFn: (path: string) => api.explainFile(repoId, path, Boolean(client.getQueryData(queryKeys.explanation(repoId, path)))),
     retry: false,
     onSuccess: (explanation, path) => client.setQueryData(queryKeys.explanation(repoId, path), explanation),
   })

@@ -17,9 +17,11 @@ from backend.schemas.ai import (
     FindingAiResponse,
     SummaryResponse,
 )
+from backend.services.ai_cache import cached_answer, fingerprint
 from backend.services.ai_payloads import (
     explain_content,
     find_finding,
+    finding_line_text,
     finding_window,
     summary_content,
 )
@@ -86,7 +88,15 @@ def finding_ai(repo_id: str, finding_id: str, request: FindingAiRequest):
     window = finding_window(repository, finding)
 
     try:
-        text = run_finding_agent(finding, request.mode, window)
+        # Keyed by rule + path + the line's text, so re-running the analysis
+        # (new finding ids, shifted lines elsewhere) keeps the answer.
+        text, cached = cached_answer(
+            repo_id,
+            f"finding_{request.mode}",
+            fingerprint(finding.get("rule_id"), relative, finding_line_text(repository, finding)),
+            lambda: run_finding_agent(finding, request.mode, window),
+            force=request.force,
+        )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     except RuntimeError as error:
@@ -97,6 +107,7 @@ def finding_ai(repo_id: str, finding_id: str, request: FindingAiRequest):
         finding_id=finding_id,
         mode=request.mode,
         text=text,
+        cached=cached,
         generated_at=datetime.now(timezone.utc).isoformat(),
         sent={
             "file": relative,
@@ -231,8 +242,13 @@ def generate_repository_summary(
         require_ai_consent(repository)
 
         content = summary_content(repository)
-        _, trimmed = repo_agent.build_request(content)
-        summary_text = run_repo_agent(content)
+        built, trimmed = repo_agent.build_request(content)
+        # Regenerate (force) always asks again; otherwise an identical fact
+        # sheet reuses the cached answer.
+        summary_text, _ = cached_answer(
+            repo_id, "summary", fingerprint(built.system, built.prompt),
+            lambda: run_repo_agent(content), force=force,
+        )
 
         summary_data = {
             "summary": summary_text,
@@ -264,8 +280,11 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
         require_ai_consent(repository)
         start, end = request.start_line, request.end_line
         content = explain_content(repository, request.file_path, start, end)
-        _, trimmed = explain_agent.build_request(content, request.file_path)
-        explanation_text = run_explain_agent(content, request.file_path)
+        built, trimmed = explain_agent.build_request(content, request.file_path)
+        explanation_text, cached = cached_answer(
+            repo_id, "explain", fingerprint(built.system, built.prompt),
+            lambda: run_explain_agent(content, request.file_path), force=request.force,
+        )
 
         return ExplainResponse(
             repository_id=repo_id,
@@ -275,6 +294,7 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
             explanation=explanation_text,
             generated_at=datetime.now(timezone.utc).isoformat(),
             truncated=trimmed,
+            cached=cached,
         )
 
     except ValueError as error:

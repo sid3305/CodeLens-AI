@@ -53,6 +53,18 @@ def find_finding(repo_id: str, finding_id: str) -> dict | None:
     return next((item for item in (results or {}).get("findings", []) if item.get("id") == finding_id), None)
 
 
+def finding_line_text(repository: dict, finding: dict) -> str:
+    """The text of the finding's line (empty if unavailable), for cache keys."""
+
+    window = finding_window(repository, finding)
+    if not window:
+        return ""
+    text, start, _ = window
+    lines = text.splitlines()
+    index = (finding.get("line") or 0) - start
+    return lines[index].split("  ", 1)[-1].strip() if 0 <= index < len(lines) else ""
+
+
 def finding_window(repository: dict, finding: dict) -> tuple[str, int, int] | None:
     """A few lines around the finding; never from sensitive files."""
 

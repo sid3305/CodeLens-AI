@@ -33,6 +33,7 @@ class AiConsentResponse(BaseModel):
 class FindingAiRequest(BaseModel):
     """B5: explain a finding, or suggest a fix for it."""
     mode: Literal["explain", "fix"]
+    force: bool = Field(False, description="Ask again instead of using the saved answer")
 
 
 class FindingAiSent(BaseModel):
@@ -49,6 +50,7 @@ class FindingAiResponse(BaseModel):
     text: str
     generated_at: str
     sent: FindingAiSent
+    cached: bool = False
 
 
 MAX_SELECTION_LINES = 60
@@ -76,6 +78,7 @@ class ExplainRequest(BaseModel):
     file_path: str = Field(..., description="Repository-relative file path")
     start_line: int | None = Field(None, ge=1, description="First selected line (1-based)")
     end_line: int | None = Field(None, ge=1, description="Last selected line (inclusive)")
+    force: bool = Field(False, description="Ask again instead of using the saved answer")
 
 
 class ExplainResponse(BaseModel):
@@ -84,6 +87,7 @@ class ExplainResponse(BaseModel):
     file_path: str
     start_line: int | None = None
     end_line: int | None = None
+    cached: bool = False
     explanation: str
     generated_at: str
     truncated: bool = False

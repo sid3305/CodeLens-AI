@@ -420,3 +420,16 @@ def test_estimate_counts_the_real_payload_and_sends_nothing(client, fake_llm):
     assert 0 < body["input_tokens"] < body["max_input_tokens"] == 3000
     assert body["output_tokens"] == 300 and body["within_budget"] is True
     assert fake_llm.calls == []
+
+
+def test_answers_are_cached_and_regenerate_asks_again(client, fake_llm):
+    repo = upload_repo(client, {"app/main.py": "x = 1\n"})
+    allow_ai(client, repo)
+    url = f"/api/repositories/{repo['id']}/files/explain"
+
+    first = client.post(url, json={"file_path": "app/main.py"}).json()
+    again = client.post(url, json={"file_path": "app/main.py"}).json()
+    forced = client.post(url, json={"file_path": "app/main.py", "force": True}).json()
+
+    assert (first["cached"], again["cached"], forced["cached"]) == (False, True, False)
+    assert len(fake_llm.calls) == 2

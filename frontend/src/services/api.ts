@@ -165,8 +165,9 @@ export const api = {
     request<SummaryResponse>(`${repo(repoId)}/summary${options.force ? '?force=true' : ''}`, { method: 'POST' }),
 
   /** Sends one file to the LLM provider. */
-  explainFile: (repoId: string, filePath: string) =>
-    request<ExplainResponse>(`${repo(repoId)}/files/explain`, json({ file_path: filePath })),
+  /** `force` asks again instead of returning the saved answer (Regenerate). */
+  explainFile: (repoId: string, filePath: string, force = false) =>
+    request<ExplainResponse>(`${repo(repoId)}/files/explain`, json({ file_path: filePath, force })),
 
   /** C5: sends only lines start..end of the file to the AI. */
   explainSelection: (repoId: string, filePath: string, start: number, end: number) =>
