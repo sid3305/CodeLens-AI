@@ -158,3 +158,29 @@ describe('names and states (C9)', () => {
     expect(screen.getByText('API connected').closest('[role="status"]')).not.toBeNull()
   })
 })
+
+describe('focus on navigation (Stage 3 leftover)', () => {
+  it('moves focus to the new page heading when the page changes', async () => {
+    const user = userEvent.setup()
+    renderAt('/repo/r1/overview')
+    await screen.findByRole('heading', { level: 1, name: 'Overview' })
+    // Not on first load: the skip link stays the first stop.
+    expect(screen.getByRole('heading', { level: 1, name: 'Overview' })).not.toHaveFocus()
+
+    await user.click(screen.getByRole('link', { name: /issues/i }))
+
+    await waitFor(() => expect(screen.getByRole('heading', { level: 1, name: 'Issues' })).toHaveFocus())
+  })
+
+  it('leaves focus alone when only filters in the address change', async () => {
+    const user = userEvent.setup()
+    renderAt('/repo/r1/issues')
+    const search = await screen.findByRole('searchbox', { name: 'Search findings' })
+
+    await user.type(search, 'abc')
+
+    await waitFor(() => expect(screen.getByTestId('address')).toHaveTextContent('/repo/r1/issues'))
+    expect(search).toHaveFocus()
+    expect(search).toHaveValue('abc')
+  })
+})

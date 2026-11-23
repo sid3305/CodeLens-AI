@@ -7,6 +7,7 @@ import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import { Button, Dialog, Drawer, IconButton, LoadingBlock, useToast } from '../ui'
 import { DESKTOP_QUERY, useMediaQuery } from '../../hooks/useMediaQuery'
+import { useFocusHeadingOnNavigation } from '../../hooks/useFocusHeadingOnNavigation'
 
 import {
   useAnalysis,
@@ -38,6 +39,7 @@ export default function AppShell() {
   const navigate = useNavigate()
   const location = useLocation()
   const activeSection = sectionFromPath(location.pathname)
+  useFocusHeadingOnNavigation(location.pathname, 'main-content')
   const routeRepoId = useMatch('/repo/:repoId/*')?.params.repoId ?? null
   const selectedFilePath = useMatch('/repo/:repoId/files/*')?.params['*'] || null
 

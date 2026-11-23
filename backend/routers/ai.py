@@ -25,19 +25,19 @@ router = APIRouter(
 
 
 
-@router.get("/{repo_id}/summary", response_model=SummaryResponse)
+@router.get("/{repo_id}/summary", response_model=SummaryResponse | None)
 def get_repository_summary(repo_id: str):
-    """Retrieve a previously generated repository summary."""
+    """
+    The saved repository summary, or null when none was generated yet
+    (an empty state, not an error). Unknown repositories are 404.
+    """
 
     try:
         repository = get_repository(repo_id)
         saved_summary = get_saved_repository_summary(repo_id)
 
         if not saved_summary:
-            raise HTTPException(
-                status_code=404,
-                detail="Repository summary has not been generated yet.",
-            )
+            return None
 
         return SummaryResponse(
             repository_id=repo_id,

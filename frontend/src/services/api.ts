@@ -103,7 +103,8 @@ export const api = {
 
   /** Previously generated summary, or null. Never calls the LLM. */
   getSummary: (repoId: string, signal?: AbortSignal) =>
-    optional<SummaryResponse>(`${repo(repoId)}/summary`, signal),
+    // null (200) until a summary is generated; 404 only for an unknown repository.
+    request<SummaryResponse | null>(`${repo(repoId)}/summary`, { signal }),
 
   /** Sends repository code to the LLM provider. */
   generateSummary: (repoId: string, options: { force?: boolean } = {}) =>

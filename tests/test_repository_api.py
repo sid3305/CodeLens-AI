@@ -208,7 +208,19 @@ def test_summary_provider_errors_are_502(client, repo, fake_llm):
     response = client.post(f"/api/repositories/{repo['id']}/summary")
 
     assert response.status_code == 502
-    assert client.get(f"/api/repositories/{repo['id']}/summary").status_code == 404
+    after = client.get(f"/api/repositories/{repo['id']}/summary")
+    assert after.status_code == 200 and after.json() is None
+
+
+def test_missing_summary_is_an_empty_200_not_an_error(client, repo):
+    response = client.get(f"/api/repositories/{repo['id']}/summary")
+
+    assert response.status_code == 200
+    assert response.json() is None
+
+
+def test_summary_of_unknown_repository_is_404(client):
+    assert client.get("/api/repositories/0123456789abcdef0123456789abcdef/summary").status_code == 404
 
 
 def test_summary_prompt_contains_no_server_paths(client, repo, fake_llm, upload_root):

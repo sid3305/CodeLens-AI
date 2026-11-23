@@ -93,6 +93,11 @@
     border-radius: 4px;
   }
 
+  /* Headings receive focus after navigation; the move itself is the cue. */
+  h1[tabindex='-1']:focus {
+    outline: none;
+  }
+
   ::selection {
     background: color-mix(in srgb, var(--cl-accent) 30%, transparent);
   }
