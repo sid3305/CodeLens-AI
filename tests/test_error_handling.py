@@ -4,7 +4,7 @@ import logging
 
 import pytest
 
-from backend.routers import dependencies as dependencies_router
+from backend.services import dependency_service
 from tests.helpers import upload_repo
 
 SECRET = "C:/Users/someone/private/path"
@@ -19,7 +19,7 @@ def test_dependency_errors_do_not_leak_details(client, monkeypatch, caplog, suff
     def explode(*_args, **_kwargs):
         raise KeyError(SECRET)
 
-    monkeypatch.setattr(dependencies_router, "parse_repository", explode)
+    monkeypatch.setattr(dependency_service, "build_import_graph", explode)
 
     with caplog.at_level(logging.ERROR):
         response = client.get(f"/api/repositories/{repo['id']}/dependencies{suffix}")

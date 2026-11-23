@@ -101,6 +101,8 @@ export interface ExternalDependency {
   language: string
   version: string | null
   is_dev_dependency: boolean
+  /** Listed in a manifest (requirements*.txt, package.json, pyproject.toml). */
+  declared?: boolean
 }
 
 export interface ModuleDependency {
@@ -112,7 +114,10 @@ export interface ModuleDependency {
 }
 
 export interface CircularDependency {
+  /** Files in import order; the last imports the first. */
   cycle: string[]
+  /** Every file in the strongly connected component. */
+  files?: string[]
   cycle_type: string
   severity: string
   description: string
@@ -156,8 +161,25 @@ export interface DependenciesGraphData {
   }
 }
 
+export interface UnresolvedImport {
+  file: string
+  line: number
+  specifier: string
+  language: string
+  reason: string
+}
+
+export interface SkippedFile {
+  path: string
+  reason: string
+}
+
 export interface DependenciesStats {
   total_imports: number
+  internal_imports?: number
+  stdlib_imports?: number
+  external_imports?: number
+  unresolved_imports?: number
   total_calls: number
   circular_import_count: number
   dead_code_count: number
@@ -172,6 +194,8 @@ export interface DependenciesAnalysisResponse {
   circular_dependencies: CircularDependency[]
   module_dependencies: ModuleDependency[]
   external_dependencies: ExternalDependency[]
+  unresolved_imports?: UnresolvedImport[]
+  skipped_files?: SkippedFile[]
   dependency_graph_data: DependenciesGraphData
   language_breakdown: Record<string, LanguageBreakdown>
   stats: DependenciesStats

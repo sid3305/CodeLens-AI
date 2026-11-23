@@ -334,9 +334,6 @@ class CodeGraphBuilder:
 
         scored = []
         for node in self.nodes_by_id.values():
-            if node.node_type == NodeType.FILE:
-                continue  # Handle files separately
-
             score = 0
             if node.complexity:
                 score += node.complexity * 2
@@ -350,25 +347,12 @@ class CodeGraphBuilder:
 
             scored.append((score, node))
 
-        scored.sort(key=lambda x: x[0], reverse=True)
+        # Highest score first; ties broken by id so the order is stable.
+        scored.sort(key=lambda x: (-x[0], x[1].id))
 
-        # Take top nodes, but ensure we have variety across files
-        selected = []
-        files_represented = set()
-
-        for score, node in scored:
-            if len(selected) >= max_nodes:
-                break
-            file_key = node.file_path
-            if file_key not in files_represented or len(selected) < max_nodes // 2:
-                selected.append(node)
-                files_represented.add(file_key)
-
-        # Always include file nodes
-        file_nodes = [n for n in self.nodes_by_id.values() if n.node_type == NodeType.FILE]
-        selected.extend(file_nodes)
-
-        return selected
+        # At most max_nodes in total (file nodes included), in rank order, so
+        # callers can trim further by slicing.
+        return [node for _score, node in scored[:max_nodes]]
 
 
 def _edge_color(edge_type: EdgeType) -> str:

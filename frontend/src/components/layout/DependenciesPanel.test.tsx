@@ -71,6 +71,19 @@ describe('DependenciesPanel fetching (D5 / BUG-22)', () => {
     expect(mockedApi.getDependenciesAnalysis).toHaveBeenCalledTimes(2)
   })
 
+  it('asks the backend to recompute on refresh, not on first load (B2)', async () => {
+    const user = userEvent.setup()
+    render(<DependenciesPanel repository={repository} />)
+    await screen.findByRole('button', { name: /external/i })
+
+    expect(mockedApi.getDependenciesAnalysis).toHaveBeenLastCalledWith('r')
+
+    await user.click(screen.getByRole('button', { name: /refresh dependency analysis/i }))
+    await waitFor(() =>
+      expect(mockedApi.getDependenciesAnalysis).toHaveBeenLastCalledWith('r', { refresh: true }),
+    )
+  })
+
   it('never shows one repository’s analysis for another', async () => {
     const other: Repository = { ...repository, id: 'other', name: 'other' }
     mockedApi.getDependenciesAnalysis.mockImplementation((id: string) =>

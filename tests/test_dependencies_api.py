@@ -1,9 +1,8 @@
 """
 Dependency analysis endpoints.
 
-The smoke tests pin the response contract. The strict xfail tests record
-known accuracy bugs from PROJECT_REVIEW.md; Stage 2 (B1/B2) must turn them
-into passing tests (strict=True makes an unexpected pass fail the suite).
+The smoke tests pin the response contract. The accuracy and path tests
+were strict xfail in Stage 1 and were turned into passing tests by B1/B2.
 """
 
 import pytest
@@ -113,7 +112,6 @@ def test_internal_module_edges_are_reported(analysis):
     assert ("web/index.js", "web/util.js") in edges
 
 
-@pytest.mark.xfail(strict=True, reason="SEC-04: absolute server paths returned (Stage 2)")
 def test_only_repository_relative_paths_are_returned(analysis, upload_root):
     assert str(upload_root) not in str(analysis)
     assert str(upload_root).replace("\\", "\\\\") not in str(analysis)

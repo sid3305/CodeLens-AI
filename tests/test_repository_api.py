@@ -211,7 +211,6 @@ def test_summary_provider_errors_are_502(client, repo, fake_llm):
     assert client.get(f"/api/repositories/{repo['id']}/summary").status_code == 404
 
 
-@pytest.mark.xfail(strict=True, reason="SEC-04: absolute server paths sent to the LLM (Stage 2)")
 def test_summary_prompt_contains_no_server_paths(client, repo, fake_llm, upload_root):
     client.post(f"/api/repositories/{repo['id']}/summary")
 

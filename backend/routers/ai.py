@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -76,7 +77,8 @@ def generate_repository_summary(
             )
 
         repo_path = repository["path"]
-        code_files = get_code_files(repo_path)
+        repo_root = Path(repo_path).resolve()
+        code_files = get_code_files(repo_root)
 
         if not code_files:
             raise ValueError(
@@ -91,7 +93,10 @@ def generate_repository_summary(
             if content.startswith("Error reading file:"):
                 continue
 
-            repository_content += f"\n\nFILE: {file_path}\n{content}"
+            # Repository-relative path: the prompt must not reveal where the
+            # repository is stored on this machine.
+            relative = Path(file_path).relative_to(repo_root).as_posix()
+            repository_content += f"\n\nFILE: {relative}\n{content}"
 
         if not repository_content.strip():
             raise ValueError("No readable code content found.")
@@ -131,8 +136,6 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
         repo_path = repository["path"]
 
         # Validate and resolve the file path
-        from pathlib import Path
-
         from utils.security import is_sensitive_file
 
         requested_path = Path(request.file_path)

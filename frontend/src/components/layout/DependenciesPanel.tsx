@@ -201,7 +201,14 @@ export default function DependenciesPanel({
     const requested = generation
     let cancelled = false
 
-    api.getDependenciesAnalysis(repositoryId).then(
+    // Generation 0 is the first load (served from the cache); later
+    // generations come from the Refresh button and recompute.
+    const request =
+      requested === 0
+        ? api.getDependenciesAnalysis(repositoryId)
+        : api.getDependenciesAnalysis(repositoryId, { refresh: true })
+
+    request.then(
       (data) => {
         if (!cancelled) {
           setLoaded({ repoId: repositoryId, generation: requested, data, error: null })

@@ -131,10 +131,17 @@ export const api = {
       },
     ),
 
-  getDependenciesAnalysis: (repoId: string, maxNodes = 200) =>
-    request<DependenciesAnalysisResponse>(
-      `/repositories/${encodeURIComponent(repoId)}/dependencies?max_nodes=${maxNodes}`,
-    ),
+  /** Cached on the server; `refresh` recomputes it. */
+  getDependenciesAnalysis: (
+    repoId: string,
+    options: { refresh?: boolean; maxNodes?: number } = {},
+  ) => {
+    const params = new URLSearchParams({ max_nodes: String(options.maxNodes ?? 200) })
+    if (options.refresh) params.set('refresh', 'true')
+    return request<DependenciesAnalysisResponse>(
+      `/repositories/${encodeURIComponent(repoId)}/dependencies?${params}`,
+    )
+  },
 
   getCircularDependencies: (repoId: string) =>
     request<{ repository_id: string; circular_dependencies: CircularDependency[]; count: number }>(
