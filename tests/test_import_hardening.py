@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from utils import file_handler
 from tests.helpers import SAMPLE_REPO, make_zip
+from utils import file_handler
 
 
 def _upload(client, archive, name="repo.zip"):
