@@ -304,8 +304,8 @@ class _ProviderFailure(Exception):
         (ConnectionError("connection to api.groq.com failed"), "Could not reach Groq. Check your connection and try again."),
         (_ProviderFailure("Error code: 500 - {'error': 'internal'}", 500), "Groq returned an error. Try again later."),
         (_ProviderFailure("Error code: 413 - {'error': 'Request too large'}", 413),
-         "Groq refused the request as too large for your plan's per-minute token limit. "
-         "Lower CODELENS_LLM_MAX_INPUT_TOKENS (now 3000) or select less code."),
+         ("Groq refused the request as too large for your plan's per-minute token limit. "
+          "Lower CODELENS_LLM_MAX_INPUT_TOKENS (now 3000) or select less code.")),
         (ValueError(r"weird failure at C:\Users\someone\secret\path"), "Groq returned an error. Try again later."),
     ],
 )
@@ -418,5 +418,5 @@ def test_estimate_counts_the_real_payload_and_sends_nothing(client, fake_llm):
                        json={"task": "explain", "file_path": "app/main.py", "start_line": 1, "end_line": 10}).json()
 
     assert 0 < body["input_tokens"] < body["max_input_tokens"] == 3000
-    assert body["output_tokens"] == 700 and body["within_budget"] is True
+    assert body["output_tokens"] == 300 and body["within_budget"] is True
     assert fake_llm.calls == []

@@ -32,7 +32,7 @@ export default function IssuesPage({
         <div className="mb-4">
           <AiConsentNotice
             repoId={repository.id}
-            sends="a finding and up to 21 lines around it, when you click Explain finding or Suggest fix,"
+            sends="a finding and up to 11 lines around it, when you click Explain finding or Suggest fix,"
           />
         </div>
       )}

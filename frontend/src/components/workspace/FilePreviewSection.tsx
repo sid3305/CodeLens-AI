@@ -6,7 +6,7 @@ import MarkdownContent from '../layout/MarkdownContent'
 import { Button, Card, CardBody, CardHeader, EmptyState, InlineMessage, LoadingBlock, SeverityBadge } from '../ui'
 
 /** The backend explains at most this many selected lines. */
-export const MAX_SELECTION_LINES = 400
+export const MAX_SELECTION_LINES = 60
 
 export default function FilePreviewSection({
   path,

@@ -51,7 +51,7 @@ class FindingAiResponse(BaseModel):
     sent: FindingAiSent
 
 
-MAX_SELECTION_LINES = 400
+MAX_SELECTION_LINES = 60
 
 
 class AiEstimateRequest(BaseModel):

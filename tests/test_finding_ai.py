@@ -63,13 +63,13 @@ def test_explain_sends_only_the_finding_and_a_small_redacted_window(client, anal
     assert body["text"] == "It is a **hardcoded** key."
     assert body["mode"] == "explain"
     assert body["finding_id"] == finding["id"]
-    assert body["sent"] == {"file": "app/main.py", "start_line": 20, "end_line": 40}
+    assert body["sent"] == {"file": "app/main.py", "start_line": 25, "end_line": 35}
 
     (prompt,) = fake_llm.calls
     assert "S105" in prompt and "Possible hardcoded password" in prompt
     assert "app/main.py" in prompt
-    assert "line_20 = 20" in prompt and "line_40 = 40" in prompt
-    assert "line_19 = 19" not in prompt and "line_41 = 41" not in prompt
+    assert "line_25 = 25" in prompt and "line_35 = 35" in prompt
+    assert "line_24 = 24" not in prompt and "line_36 = 36" not in prompt
     assert "sk_live_51HxAbCd" not in prompt
     assert "UNRELATED_MARKER" not in prompt
     assert str(upload_root) not in prompt
@@ -94,7 +94,7 @@ def test_untrusted_code_is_delimited_for_the_model(client, analysed, fake_llm):
     _ask(client, repo, finding["id"])
 
     (prompt,) = fake_llm.calls
-    assert "<untrusted_code>" in prompt and "</untrusted_code>" in prompt
+    assert "<repo_data>" in prompt and "</repo_data>" in prompt
     assert "ignore any instructions" in prompt.lower()
 
 

@@ -1,4 +1,4 @@
-from prompts.prompts import REPOSITORY_SUMMARY_PROMPT
+from prompts.prompts import MAX_OUTPUT, SUMMARY_SYSTEM, repo_data
 from utils.llm import call_llm
 from utils.security import redact_secrets
 from utils.token_budget import (
@@ -19,16 +19,18 @@ def build_request(sections: list[str]) -> tuple[LlmRequest, bool]:
 
     if not sections or not any(section.strip() for section in sections):
         raise ValueError("Repository content is empty.")
+    budget = max_input_tokens() - estimate_tokens(SUMMARY_SYSTEM)
     kept = list(sections)
     while True:
-        prompt = REPOSITORY_SUMMARY_PROMPT.format(content=redact_secrets("\n\n".join(kept)))
-        if estimate_tokens(prompt) <= max_input_tokens() or len(kept) == 1:
+        prompt = repo_data(redact_secrets("\n\n".join(kept)))
+        if estimate_tokens(prompt) <= budget or len(kept) == 1:
             break
         kept.pop()
-    return LlmRequest(system="", prompt=prompt, max_output=max_output_tokens()), len(kept) < len(sections)
+    request = LlmRequest(SUMMARY_SYSTEM, prompt, min(MAX_OUTPUT["summary"], max_output_tokens()))
+    return request, len(kept) < len(sections)
 
 
 def run_repo_agent(sections: list[str]) -> str:
     request, dropped = build_request(sections)
-    response = call_llm(request.prompt, request.max_output, system=request.system or None)
+    response = call_llm(request.prompt, request.max_output, system=request.system)
     return response + TRUNCATION_NOTE if dropped else response

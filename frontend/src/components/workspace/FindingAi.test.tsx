@@ -42,7 +42,7 @@ describe('finding AI (B5)', () => {
   it('says what is sent, and to whom, before anything is sent', async () => {
     renderWithProviders(card())
 
-    expect(await screen.findByText(/Sends this finding and up to 21 lines around line 30 of app\/main\.py to Groq \(test-model\)/)).toBeInTheDocument()
+    expect(await screen.findByText(/Sends this finding and up to 11 lines around line 30 of app\/main\.py to Groq \(test-model\)/)).toBeInTheDocument()
     expect(mockedApi.findingAi).not.toHaveBeenCalled()
   })
 

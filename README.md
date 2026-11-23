@@ -25,8 +25,8 @@ code or findings. It runs on your machine and is meant for `localhost` use.
   calls are never retried.
 - **What can be sent:**
   - Explain this file: the file, up to 12,000 characters.
-  - Explain selection: only the selected lines, at most 400.
-  - Explain finding / Suggest fix: the finding plus at most 21 lines around it.
+  - Explain selection: only the selected lines, at most 60.
+  - Explain finding / Suggest fix: rule id, message, path and at most 11 lines around it.
   - Summary: a fact sheet (languages, dependencies, structure, top findings, README start, signatures), not full source.
 - **Never sent, listed or previewed:**
   - `.env*`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.htpasswd`, `.pgpass`

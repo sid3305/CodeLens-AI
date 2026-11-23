@@ -45,7 +45,7 @@ export default function FindingAi({ finding, repositoryId }: { finding: Finding;
   const busy = ask.isPending ? ask.variables : null
   const recipient = consent ? `${consent.provider} (${consent.model})` : 'the AI provider'
   const payload = finding.line
-    ? `this finding and up to 21 lines around line ${finding.line} of ${finding.file}`
+    ? `this finding and up to 11 lines around line ${finding.line} of ${finding.file}`
     : 'this finding (no code)'
 
   return (
