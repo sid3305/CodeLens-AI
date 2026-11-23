@@ -79,6 +79,11 @@ textarea:focus-visible {
   --accent-blue: #536DD1;
   --accent-teal: #329A7C;
   --accent-orange: #CE873C;
+  --accent-blue-rgb: 83, 109, 209;
+  --accent-contrast: #FFFFFF;
+
+  --code-bg: #F3F4F7;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', Consolas, ui-monospace, monospace;
 
   --scroll-thumb: #C5C9D2;
   --selection-bg: #6478C944;
@@ -138,6 +143,10 @@ textarea:focus-visible {
   --accent-blue: #A8B8FF;
   --accent-teal: #83D9B8;
   --accent-orange: #F3BD7C;
+  --accent-blue-rgb: 168, 184, 255;
+  --accent-contrast: #1A2140;
+
+  --code-bg: #1E2533;
 
   --scroll-thumb: #566176;
   --selection-bg: #A8B8FF55;

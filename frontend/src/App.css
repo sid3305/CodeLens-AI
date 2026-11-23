@@ -842,10 +842,29 @@
 }
 
 /* Primary button improvements */
+.primary-button,
+.secondary-button,
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  cursor: pointer;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 .primary-button {
   position: relative;
   overflow: hidden;
-  transition: all 0.2s ease;
+  padding: 9px 15px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: var(--accent-blue);
+  color: var(--accent-contrast);
+  font-size: 13px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
 }
 
 .primary-button:hover:not(:disabled) {
@@ -1794,7 +1813,7 @@
   flex: 1;
   min-width: 220px;
   padding: 11px 14px;
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--surface);
   color: var(--text-primary);
