@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
+import { Outlet, useLocation, useMatch, useNavigate } from 'react-router'
 import { useQueryClient } from '@tanstack/react-query'
 import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
@@ -19,21 +20,8 @@ import {
 import { queryKeys } from '../../data/queryClient'
 import { api, errorMessage } from '../../services/api'
 import type { Repository, WorkspaceSection } from '../../types'
-import type { FindingFilters } from '../workspace/findingFilters'
-import ArchitecturePage from '../../pages/ArchitecturePage'
-import FilePreviewPage from '../../pages/FilePreviewPage'
-import IssuesPage from '../../pages/IssuesPage'
-import OverviewPage from '../../pages/OverviewPage'
-import WelcomePage from '../../pages/WelcomePage'
-
-/** The previewed file, tagged with its repository. */
-interface FileSelection {
-  repoId: string
-  path: string
-  line: number | null
-}
-
-const DEFAULT_FILTERS: FindingFilters = { query: '', severity: 'All', analyzer: 'All' }
+import { paths, sectionFromPath, type NavSection } from '../../app/paths'
+import type { ShellContext } from '../../app/shellContext'
 
 const SECTION_TITLES: Record<WorkspaceSection, string> = {
   overview: 'Overview',
@@ -42,8 +30,16 @@ const SECTION_TITLES: Record<WorkspaceSection, string> = {
   'file-preview': 'File preview',
 }
 
+/**
+ * Header, navigation and dialogs around the routed page. The URL is the
+ * source of truth for the repository, section, file and filters shown.
+ */
 export default function AppShell() {
-  const [activeSection, setActiveSection] = useState<WorkspaceSection>('overview')
+  const navigate = useNavigate()
+  const location = useLocation()
+  const activeSection = sectionFromPath(location.pathname)
+  const routeRepoId = useMatch('/repo/:repoId/*')?.params.repoId ?? null
+  const selectedFilePath = useMatch('/repo/:repoId/files/*')?.params['*'] || null
 
   const isDesktop = useMediaQuery(DESKTOP_QUERY)
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -57,27 +53,15 @@ export default function AppShell() {
 
   const repositoriesQuery = useRepositories()
   const repositories = repositoriesQuery.data ?? []
-  const [chosenRepositoryId, setChosenRepositoryId] = useState<string | null>(null)
-  // Falls back to the first repository when the chosen one is gone.
-  const selectedRepository =
-    repositories.find((repo) => repo.id === chosenRepositoryId) ?? repositories[0] ?? null
+  const selectedRepository = repositories.find((repo) => repo.id === routeRepoId) ?? null
   const selectedRepositoryId = selectedRepository?.id ?? null
 
-  // Server state is keyed by repository id (query keys) and so are the
-  // selections below: switching repositories cancels the old requests and
-  // never shows another repository's data.
+  // Server state is keyed by repository id, so switching repositories
+  // cancels the old requests and never shows another repository's data.
   const files = useRepositoryFiles(selectedRepositoryId).data ?? []
   const analysis = useAnalysis(selectedRepositoryId).data ?? null
 
-  const [fileSelection, setFileSelection] = useState<FileSelection | null>(null)
   const [explorerFocus, setExplorerFocus] = useState<{ repoId: string; path: string } | null>(null)
-  const [filters, setFilters] = useState<{ repoId: string; value: FindingFilters } | null>(null)
-
-  const currentFile =
-    fileSelection && fileSelection.repoId === selectedRepositoryId ? fileSelection : null
-  const selectedFilePath = currentFile?.path ?? null
-  const currentFilters =
-    filters && filters.repoId === selectedRepositoryId ? filters.value : DEFAULT_FILTERS
 
   const importZip = useImportZip()
   const importLink = useImportLink()
@@ -86,35 +70,38 @@ export default function AppShell() {
   const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null)
   const deleting = deleteRepository.isPending
 
-  const selectRepository = (id: string | null) => setChosenRepositoryId(id)
+  /** Keeps the current section when switching (the file preview falls back to Overview). */
+  const sectionFor = (section: WorkspaceSection | null): NavSection =>
+    section && section !== 'file-preview' ? section : 'overview'
+  const repositoryHref = (id: string) => paths.section(id, sectionFor(activeSection))
+  const selectRepository = (id: string) => navigate(repositoryHref(id))
 
-  const handleSelectFile = (
-    path: string,
-    line: number | null = null,
-    repoId: string | null = selectedRepositoryId,
-  ) => {
-    if (!repoId) return
-    setFileSelection({ repoId, path, line })
-    setActiveSection('file-preview')
-  }
+  const openFile = (repoId: string, path: string, line: number | null = null) =>
+    navigate(paths.file(repoId, path, line))
 
-  /** Open what a link pointed at: a file in the preview, a folder in the explorer. */
-  const openFocus = async (repoId: string, focusPath: string) => {
-    const listing = await queryClient.fetchQuery({
-      queryKey: queryKeys.files(repoId),
-      queryFn: ({ signal }) => api.getFiles(repoId, signal),
-    })
-    if (listing.files.some((file) => file.path === focusPath)) {
-      handleSelectFile(focusPath, null, repoId)
-    } else {
+  /**
+   * Go to what an imported link pointed at, in one navigation: a file opens
+   * in the preview; a folder opens the Overview with the folder revealed.
+   */
+  const openImported = async (repoId: string, focusPath: string | null | undefined) => {
+    if (focusPath) {
+      const listing = await queryClient.fetchQuery({
+        queryKey: queryKeys.files(repoId),
+        queryFn: ({ signal }) => api.getFiles(repoId, signal),
+      })
+      if (listing.files.some((file) => file.path === focusPath)) {
+        openFile(repoId, focusPath)
+        return
+      }
       setExplorerFocus({ repoId, path: focusPath })
     }
+    navigate(paths.section(repoId, 'overview'))
   }
 
   const handleImportZip = async (file: File) => {
     try {
       const repository = await importZip.mutateAsync(file)
-      selectRepository(repository.id)
+      navigate(paths.section(repository.id, 'overview'))
       notify('success', `${repository.name} imported successfully.`)
       return true
     } catch (err) {
@@ -126,12 +113,11 @@ export default function AppShell() {
   const handleImportGitHub = async (repoUrl: string) => {
     try {
       const repository = await importLink.mutateAsync(repoUrl)
-      selectRepository(repository.id)
       notify(
         'success',
         `${repository.name}${repository.ref ? ` @ ${repository.ref}` : ''} imported successfully.`,
       )
-      if (repository.focus_path) await openFocus(repository.id, repository.focus_path)
+      await openImported(repository.id, repository.focus_path)
       return true
     } catch (err) {
       notify('error', errorMessage(err, 'Import failed.'))
@@ -146,6 +132,7 @@ export default function AppShell() {
       onSuccess: () => {
         setDeleteTarget(null)
         notify('success', `${target.name} was deleted successfully.`)
+        if (target.id === routeRepoId) navigate(paths.home, { replace: true })
       },
       onError: (err) => notify('error', errorMessage(err, 'Unable to delete repository.')),
     })
@@ -154,16 +141,15 @@ export default function AppShell() {
   const sidebar = (
     <Sidebar
       activeSection={activeSection}
-      onNavigate={(section) => {
-        setFileSelection(null)
-        setActiveSection(section)
-      }}
+      sectionHref={(section) => (selectedRepositoryId ? paths.section(selectedRepositoryId, section) : null)}
       repositories={repositories}
       selectedRepositoryId={selectedRepositoryId}
-      onSelectRepository={selectRepository}
+      repositoryHref={repositoryHref}
       files={files}
       selectedFilePath={selectedFilePath}
-      onSelectFile={(path) => handleSelectFile(path)}
+      onSelectFile={(path) => {
+        if (selectedRepositoryId) openFile(selectedRepositoryId, path)
+      }}
       onImportZip={handleImportZip}
       onImportGitHub={handleImportGitHub}
       onDeleteRepository={(repository) => setDeleteTarget(repository)}
@@ -177,44 +163,13 @@ export default function AppShell() {
     />
   )
 
-  let page
-  if (!selectedRepository) {
-    page = repositoriesQuery.isPending ? (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
-        <LoadingBlock label="Loading repositories" lines={3} />
-      </div>
-    ) : (
-      <WelcomePage importing={importing} onImportLink={handleImportGitHub} onImportZip={handleImportZip} />
-    )
-  } else if (activeSection === 'overview') {
-    page = <OverviewPage key={selectedRepository.id} repository={selectedRepository} />
-  } else if (activeSection === 'architecture') {
-    page = (
-      <ArchitecturePage
-        key={selectedRepository.id}
-        repository={selectedRepository}
-        onOpenFile={(path) => handleSelectFile(path)}
-      />
-    )
-  } else if (activeSection === 'issues') {
-    page = (
-      <IssuesPage
-        key={selectedRepository.id}
-        repository={selectedRepository}
-        filters={currentFilters}
-        onFiltersChange={(value) => setFilters({ repoId: selectedRepository.id, value })}
-        onOpenFinding={(path, line) => handleSelectFile(path, line)}
-      />
-    )
-  } else {
-    page = (
-      <FilePreviewPage
-        key={`${selectedRepository.id}:${selectedFilePath ?? ''}`}
-        repository={selectedRepository}
-        path={selectedFilePath}
-        line={currentFile?.line ?? null}
-      />
-    )
+  const shellContext: ShellContext = {
+    repositories,
+    repositoriesPending: repositoriesQuery.isPending,
+    importing,
+    onImportZip: handleImportZip,
+    onImportLink: handleImportGitHub,
+    onOpenFile: openFile,
   }
 
   return (
@@ -257,9 +212,10 @@ export default function AppShell() {
                     <select
                       id="repository-switcher"
                       value={selectedRepositoryId ?? ''}
-                      onChange={(event) => selectRepository(event.target.value)}
+                      onChange={(event) => event.target.value && selectRepository(event.target.value)}
                       className="h-8 max-w-[38vw] truncate rounded-sm border border-transparent bg-transparent pl-1.5 pr-6 text-sm font-medium text-fg hover:border-border-strong sm:max-w-xs"
                     >
+                      {!selectedRepository && <option value="" disabled>Choose a repository</option>}
                       {repositories.map((repository) => (
                         <option key={repository.id} value={repository.id}>{repository.name}</option>
                       ))}
@@ -269,7 +225,7 @@ export default function AppShell() {
                   <span className="text-fg-muted">No repository</span>
                 )}
               </li>
-              {selectedRepository && (
+              {selectedRepository && activeSection && (
                 <>
                   <li aria-hidden="true" className="text-fg-subtle">/</li>
                   <li aria-current="page" className="truncate font-medium text-fg">
@@ -311,7 +267,15 @@ export default function AppShell() {
 
         <div className="flex min-w-0 flex-1">
           <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
-            {page}
+            <Suspense
+              fallback={
+                <div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6">
+                  <LoadingBlock label="Loading page" lines={4} />
+                </div>
+              }
+            >
+              <Outlet context={shellContext} />
+            </Suspense>
           </main>
         </div>
       </div>

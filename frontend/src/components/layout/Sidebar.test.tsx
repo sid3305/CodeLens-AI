@@ -10,10 +10,10 @@ type Props = ComponentProps<typeof Sidebar>
 function props(overrides: Partial<Props> = {}): Props {
   return {
     activeSection: 'overview',
-    onNavigate: vi.fn(),
+    sectionHref: (section) => `/repo/r1/${section}`,
     repositories: [],
     selectedRepositoryId: null,
-    onSelectRepository: vi.fn(),
+    repositoryHref: (id) => `/repo/${id}/overview`,
     files: [],
     selectedFilePath: null,
     onSelectFile: vi.fn(),
@@ -33,8 +33,8 @@ describe('Sidebar navigation (A10)', () => {
 
     const nav = screen.getByRole('navigation', { name: /workspace/i })
     const labels = within(nav)
-      .getAllByRole('button')
-      .map((button) => button.textContent?.trim())
+      .getAllByRole('link')
+      .map((link) => link.textContent?.trim())
 
     expect(labels).toEqual(['Overview', 'Architecture', 'Issues'])
   })
@@ -49,7 +49,22 @@ describe('Sidebar navigation (A10)', () => {
   it('shows the real issue count once an analysis exists', () => {
     renderWithProviders(<Sidebar {...props({ issueCount: 7 })} />)
 
-    expect(screen.getByRole('button', { name: /issues/i })).toHaveTextContent('7')
+    expect(screen.getByRole('link', { name: /issues/i })).toHaveTextContent('7')
+  })
+
+  it('links each section to its address and marks the current one (C3)', () => {
+    renderWithProviders(<Sidebar {...props({ activeSection: 'issues' })} />)
+
+    expect(screen.getByRole('link', { name: 'Architecture' })).toHaveAttribute('href', '/repo/r1/architecture')
+    expect(screen.getByRole('link', { name: /issues/i })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Overview' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('offers no section links while no repository is open (C3)', () => {
+    renderWithProviders(<Sidebar {...props({ activeSection: null, sectionHref: () => null })} />)
+
+    const nav = screen.getByRole('navigation', { name: /workspace/i })
+    expect(within(nav).queryAllByRole('link')).toHaveLength(0)
   })
 })
 

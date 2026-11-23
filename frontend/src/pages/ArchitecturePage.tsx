@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { ChevronDown, FileWarning, Files, GitMerge, Package, RefreshCw, Zap } from 'lucide-react'
 
 import { useDependencies, useRefreshDependencies } from '../data/hooks'
@@ -28,8 +27,8 @@ import {
   TabsTrigger,
 } from '../components/ui'
 import { PageContainer, PageHeader } from './PageHeader'
+import type { ArchitectureView } from './architectureViews'
 
-type TabId = 'overview' | 'circular' | 'external' | 'modules'
 
 /** Imports that could not be resolved and files that could not be parsed. */
 function ProblemsSection({ analysis }: { analysis: DependenciesAnalysisResponse }) {
@@ -95,12 +94,16 @@ function ProblemsSection({ analysis }: { analysis: DependenciesAnalysisResponse 
 /** Render with key={repository.id}. */
 export default function ArchitecturePage({
   repository,
+  view,
+  onViewChange,
   onOpenFile,
 }: {
   repository: Repository
+  /** The open view; kept in the URL by the route. */
+  view: ArchitectureView
+  onViewChange: (view: ArchitectureView) => void
   onOpenFile: (path: string) => void
 }) {
-  const [tab, setTab] = useState<TabId>('overview')
   const dependencies = useDependencies(repository.id)
   const refresh = useRefreshDependencies(repository.id)
 
@@ -148,7 +151,7 @@ export default function ArchitecturePage({
                 description="Imports between files, circular dependencies and external packages"
               />
               <CardBody>
-                <Tabs value={tab} onValueChange={(value) => setTab(value as TabId)}>
+                <Tabs value={view} onValueChange={(value) => onViewChange(value as ArchitectureView)}>
                   <TabsList label="Dependency views">
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="circular">Circular ({analysis.circular_dependencies.length})</TabsTrigger>
@@ -156,7 +159,7 @@ export default function ArchitecturePage({
                     <TabsTrigger value="modules">Modules ({analysis.module_dependencies.length})</TabsTrigger>
                   </TabsList>
                   <TabsContent value="overview">
-                    <OverviewTab analysis={analysis} onShowCircular={() => setTab('circular')} />
+                    <OverviewTab analysis={analysis} onShowCircular={() => onViewChange('circular')} />
                   </TabsContent>
                   <TabsContent value="circular">
                     <CyclesTab cycles={analysis.circular_dependencies} />

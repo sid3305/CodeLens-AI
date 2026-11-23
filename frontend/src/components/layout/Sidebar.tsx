@@ -11,20 +11,24 @@ import {
   Upload,
 } from 'lucide-react'
 import { useId, useState } from 'react'
+import { Link } from 'react-router'
 import type { ReactNode } from 'react'
 
 import type { Repository, RepositoryFile, WorkspaceSection } from '../../types'
+import type { NavSection } from '../../app/paths'
 import FileExplorer from '../explorer/FileExplorer'
 import ImportPanel from '../import/ImportPanel'
 import { Button, IconButton, cn } from '../ui'
 
 interface SidebarProps {
-  activeSection: WorkspaceSection
-  onNavigate: (section: WorkspaceSection) => void
+  /** The section shown, or null outside a repository. */
+  activeSection: WorkspaceSection | null
+  /** Where a section link goes; null while no repository is open. */
+  sectionHref: (section: NavSection) => string | null
 
   repositories: Repository[]
   selectedRepositoryId: string | null
-  onSelectRepository: (id: string) => void
+  repositoryHref: (id: string) => string
 
   files: RepositoryFile[]
   selectedFilePath: string | null
@@ -52,10 +56,10 @@ const navigation = [
 
 export default function Sidebar({
   activeSection,
-  onNavigate,
+  sectionHref,
   repositories,
   selectedRepositoryId,
-  onSelectRepository,
+  repositoryHref,
   files,
   selectedFilePath,
   onSelectFile,
@@ -89,14 +93,6 @@ export default function Sidebar({
       return ok
     })
 
-  const navigateTo = (section: WorkspaceSection) => {
-    onNavigate(section)
-    onNavigated?.()
-  }
-  const selectRepository = (id: string) => {
-    onSelectRepository(id)
-    onNavigated?.()
-  }
   const selectFile = (path: string) => {
     onSelectFile(path)
     onNavigated?.()
@@ -120,28 +116,45 @@ export default function Sidebar({
         <SidebarSection title="Workspace" open={workspaceOpen} onToggle={() => setWorkspaceOpen(!workspaceOpen)}>
           <nav aria-label="Workspace sections">
             <ul className="space-y-0.5">
-              {navigation.map(({ id, label, icon: Icon }) => (
-                <li key={id}>
-                  <button
-                    type="button"
-                    onClick={() => navigateTo(id)}
-                    aria-current={activeSection === id ? 'page' : undefined}
-                    className={cn(
-                      'flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-base text-fg-muted hover:bg-surface-hover hover:text-fg',
-                      activeSection === id &&
-                        'bg-accent-soft font-medium text-accent-text hover:bg-accent-soft hover:text-accent-text',
-                    )}
-                  >
+              {navigation.map(({ id, label, icon: Icon }) => {
+                const href = sectionHref(id)
+                const active = activeSection === id
+                const content = (
+                  <>
                     <Icon size={16} aria-hidden="true" />
                     <span>{label}</span>
                     {id === 'issues' && issueCount !== null && (
                       <span className="ml-auto rounded-sm bg-surface-2 px-1.5 text-xs font-medium tabular-nums text-fg-muted">
-                        {issueCount}
+                        <span className="sr-only">(</span>{issueCount}<span className="sr-only"> findings)</span>
                       </span>
                     )}
-                  </button>
-                </li>
-              ))}
+                  </>
+                )
+                const base = 'flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-base'
+                return (
+                  <li key={id}>
+                    {href ? (
+                      <Link
+                        to={href}
+                        onClick={onNavigated}
+                        aria-current={active ? 'page' : undefined}
+                        className={cn(
+                          base,
+                          'text-fg-muted hover:bg-surface-hover hover:text-fg',
+                          active && 'bg-accent-soft font-medium text-accent-text hover:bg-accent-soft hover:text-accent-text',
+                        )}
+                      >
+                        {content}
+                      </Link>
+                    ) : (
+                      // No repository open: nothing to navigate to yet.
+                      <span aria-disabled="true" className={cn(base, 'text-fg-subtle')}>
+                        {content}
+                      </span>
+                    )}
+                  </li>
+                )
+              })}
             </ul>
           </nav>
         </SidebarSection>
@@ -186,10 +199,10 @@ export default function Sidebar({
                       selected && 'bg-surface-2',
                     )}
                   >
-                    <button
-                      type="button"
+                    <Link
+                      to={repositoryHref(repository.id)}
                       aria-current={selected ? 'true' : undefined}
-                      onClick={() => selectRepository(repository.id)}
+                      onClick={onNavigated}
                       className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
                     >
                       <FolderGit2 size={16} aria-hidden="true" className="shrink-0 text-fg-muted" />
@@ -202,7 +215,7 @@ export default function Sidebar({
                           {ref ? ` · ${ref}` : ''} · {repository.file_count} files
                         </span>
                       </span>
-                    </button>
+                    </Link>
                     <IconButton
                       size="sm"
                       aria-label={`Delete ${repository.name}`}

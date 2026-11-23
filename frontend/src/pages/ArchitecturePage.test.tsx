@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -6,6 +7,7 @@ import { renderWithProviders } from '../test/render'
 import ArchitecturePage from './ArchitecturePage'
 import { api } from '../services/api'
 import type { DependenciesAnalysisResponse, Repository } from '../types'
+import type { ArchitectureView } from './architectureViews'
 
 vi.mock('../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../services/api')>()
@@ -53,8 +55,14 @@ beforeEach(() => {
 
 const repository: Repository = { id: 'r', name: 'repo', source: 'zip', file_count: 2, created_at: '' }
 
+/** The route keeps the view in the URL; a local state stands in for it here. */
+function Harness({ repo, onOpenFile }: { repo: Repository; onOpenFile: (path: string) => void }) {
+  const [view, setView] = useState<ArchitectureView>('overview')
+  return <ArchitecturePage repository={repo} view={view} onViewChange={setView} onOpenFile={onOpenFile} />
+}
+
 function page(repo: Repository = repository, onOpenFile = vi.fn()) {
-  return <ArchitecturePage key={repo.id} repository={repo} onOpenFile={onOpenFile} />
+  return <Harness key={repo.id} repo={repo} onOpenFile={onOpenFile} />
 }
 
 describe('ArchitecturePage fetching (D5 / BUG-22)', () => {

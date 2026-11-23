@@ -48,6 +48,10 @@ export default function IssuesSection({
   const visible = filterFindings(findings, filters)
   const severities = SEVERITY_ORDER.filter((severity) => findings.some((f) => f.severity === severity))
   const analyzers = [...new Set(findings.flatMap((finding) => finding.detected_by))].sort()
+  // A filter from the URL may name a value with no findings; keep it
+  // selectable so the control shows what is actually applied.
+  if (filters.severity !== 'All' && !severities.includes(filters.severity)) severities.push(filters.severity)
+  if (filters.analyzer !== 'All' && !analyzers.includes(filters.analyzer)) analyzers.push(filters.analyzer)
   const counts = analysis.summary.severity_counts
 
   return (
