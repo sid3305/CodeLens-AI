@@ -20,6 +20,9 @@ env/
 # Streamlit
 .streamlit/secrets.toml
 
+# Local review / scratch artifacts
+.review-scratch/
+
 # Uploaded repositories and temporary files
 uploads/
 temp/
