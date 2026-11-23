@@ -38,6 +38,7 @@ import type {
 import { api, errorMessage } from '../../services/api'
 import DependenciesPanel from './DependenciesPanel'
 import MarkdownContent from './MarkdownContent'
+import { describeAnalysis } from '../../lib/analysis'
 
 interface WorkspacePanelProps {
   activeSection: WorkspaceSection
@@ -421,6 +422,7 @@ export default function WorkspacePanel({
   const isDependencies = activeSection === 'dependencies'
 
   const findings = analysis?.findings ?? []
+  const analysisOutcome = analysis ? describeAnalysis(analysis) : null
   const severityCounts = analysis?.summary.severity_counts ?? {}
 
   const severities = ['All', ...new Set(findings.map((f) => f.severity))]
@@ -759,10 +761,18 @@ const filteredFindings = findings.filter((finding) => {
           </p>
         </div>
 
-        {analysis && (
-          <span className="analysis-completed">
-            <CheckCircle2 size={14} />
-            Analysis completed
+        {analysisOutcome && (
+          <span className={`analysis-completed ${analysisOutcome.tone}`}>
+            {analysisOutcome.tone === 'success' ? (
+              <CheckCircle2 size={14} />
+            ) : (
+              <AlertTriangle size={14} />
+            )}
+            {analysisOutcome.tone === 'success'
+              ? 'Analysis completed'
+              : analysisOutcome.tone === 'warning'
+                ? `Partial: ${analysisOutcome.failedTools.join(', ')} not run`
+                : 'Analysis failed'}
           </span>
         )}
       </div>
@@ -957,6 +967,10 @@ const filteredFindings = findings.filter((finding) => {
         </span>
       )}
     </div>
+
+    {currentExplanation?.error && (
+      <p className="inline-error" role="alert">{currentExplanation.error}</p>
+    )}
 
     {selectedFileContent === null ? (
       <div className="empty-content compact-empty">

@@ -2968,3 +2968,32 @@
 [data-theme='dark'] .inline-error {
   color: #fca5a5;
 }
+
+/* Global status banner (A3). */
+.status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  font-size: 13px;
+}
+
+.status-banner.success { color: #166534; background: #dcfce7; }
+.status-banner.warning { color: #92400e; background: #fef3c7; }
+.status-banner.error { color: #991b1b; background: #fee2e2; }
+
+.status-banner-dismiss {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.status-dot.checking { background: #a3a3a3; }
+.status-dot.online { background: #16a34a; }
+.status-dot.offline { background: #dc2626; }
+
+.analysis-completed.warning { color: #b45309; }
+.analysis-completed.error { color: #b91c1c; }

@@ -93,6 +93,29 @@ def _build_summary(result):
     }
 
 
+def _overall_status(tool_status):
+    """
+    Summarise analyzer outcomes.
+
+    "completed" only when every analyzer ran; "partial" when some failed
+    (typically because the tool is not installed); "failed" when none ran.
+    """
+
+    statuses = [
+        str(item.get("status", "")).lower()
+        for item in tool_status.values()
+    ]
+    completed = statuses.count("completed")
+
+    if statuses and completed == len(statuses):
+        return "completed"
+
+    if completed:
+        return "partial"
+
+    return "failed"
+
+
 def analyze_repository(repo_id):
     """Run all existing analyzers against a repository."""
 
@@ -121,7 +144,7 @@ def analyze_repository(repo_id):
         response = {
             "repository_id": repo_id,
             "repository_name": repository["name"],
-            "status": "completed",
+            "status": _overall_status(result["tool_status"]),
             "analyzed_at": analyzed_at,
             "summary": _build_summary(result),
             "tool_status": result["tool_status"],

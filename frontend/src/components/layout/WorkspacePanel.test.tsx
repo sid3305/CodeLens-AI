@@ -109,6 +109,26 @@ describe('WorkspacePanel regenerate (A2 / BUG-05)', () => {
   })
 })
 
+describe('WorkspacePanel error surfacing (A3 / BUG-17)', () => {
+  it('shows why a file explanation failed', async () => {
+    mockedApi.explainFile.mockRejectedValue(new Error('AI service error: rate limited'))
+    const user = userEvent.setup()
+    render(
+      <WorkspacePanel
+        {...props({
+          activeSection: 'file-preview',
+          selectedFilePath: 'a.py',
+          selectedFileContent: 'x = 1',
+        })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /explain this file/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/rate limited/i)
+  })
+})
+
 describe('WorkspacePanel file explanation (A1 / BUG-04)', () => {
   it('clears the explanation when a different file is opened', async () => {
     mockedApi.explainFile.mockImplementation(async (_id: string, path: string) => ({

@@ -12,6 +12,7 @@ import WorkspacePanel from './WorkspacePanel'
 import AIAssistant from './AIAssistant'
 
 import { api } from '../../services/api'
+import { describeAnalysis, type MessageTone } from '../../lib/analysis'
 import type {
   WorkspaceSection,
   Repository,
@@ -20,6 +21,14 @@ import type {
 } from '../../types'
 
 type Theme = 'light' | 'dark'
+type ApiStatus = 'checking' | 'online' | 'offline'
+
+interface Notice {
+  tone: MessageTone
+  text: string
+}
+
+const HEALTH_CHECK_INTERVAL_MS = 30_000
 
 export default function AppShell() {
   const [activeSection, setActiveSection] =
@@ -43,7 +52,8 @@ export default function AppShell() {
   const [importing, setImporting] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [apiStatus, setApiStatus] = useState<ApiStatus>('checking')
   const [deleteTarget, setDeleteTarget] = useState<Repository | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [selectedLine, setSelectedLine] = useState<number | null>(null)
@@ -73,6 +83,29 @@ export default function AppShell() {
   useEffect(() => {
     void loadRepositories()
   }, [loadRepositories])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const checkHealth = () => {
+      api.health().then(
+        () => {
+          if (!cancelled) setApiStatus('online')
+        },
+        () => {
+          if (!cancelled) setApiStatus('offline')
+        },
+      )
+    }
+
+    checkHealth()
+    const timer = window.setInterval(checkHealth, HEALTH_CHECK_INTERVAL_MS)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
+  }, [])
 
   useEffect(() => {
     if (!selectedRepositoryId) {
@@ -130,7 +163,7 @@ export default function AppShell() {
 
       await loadRepositories()
       setSelectedRepositoryId(repository.id)
-      setNotice(`${repository.name} imported successfully.`)
+      setNotice({ tone: 'success', text: `${repository.name} imported successfully.` })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'ZIP import failed.')
     } finally {
@@ -148,7 +181,7 @@ export default function AppShell() {
 
       await loadRepositories()
       setSelectedRepositoryId(repository.id)
-      setNotice(`${repository.name} imported successfully.`)
+      setNotice({ tone: 'success', text: `${repository.name} imported successfully.` })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'GitHub import failed.')
     } finally {
@@ -166,8 +199,9 @@ export default function AppShell() {
 
     try {
       const result = await api.analyzeRepository(selectedRepositoryId)
+      const outcome = describeAnalysis(result)
       setAnalysis(result)
-      setNotice('Repository analysis completed successfully.')
+      setNotice({ tone: outcome.tone, text: outcome.message })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed.')
     } finally {
@@ -215,7 +249,7 @@ export default function AppShell() {
     }
 
     setDeleteTarget(null)
-    setNotice(`${deleteTarget.name} was deleted successfully.`)
+    setNotice({ tone: 'success', text: `${deleteTarget.name} was deleted successfully.` })
   } catch (err) {
     setError(
       err instanceof Error ? err.message : 'Unable to delete repository.',
@@ -271,8 +305,12 @@ export default function AppShell() {
           </div>
 
           <div className="toolbar-status">
-            <span className="status-dot" />
-            {loading ? 'Connecting...' : 'API connected'}
+            <span className={`status-dot ${apiStatus}`} aria-hidden="true" />
+            {apiStatus === 'checking'
+              ? 'Checking API…'
+              : apiStatus === 'online'
+                ? 'API connected'
+                : 'API unreachable'}
           </div>
 
           <div className="appearance-switcher">
@@ -300,25 +338,17 @@ export default function AppShell() {
 
         {(error || notice) && (
           <div
-            role="status"
-            style={{
-              padding: '10px 18px',
-              color: error ? '#dc2626' : '#15803d',
-              background: error ? '#fee2e2' : '#dcfce7',
-              fontSize: '13px',
-            }}
+            className={`status-banner ${error ? 'error' : notice?.tone}`}
+            role={error || notice?.tone === 'error' ? 'alert' : 'status'}
           >
-            {error ?? notice}
+            <span>{error ?? notice?.text}</span>
             <button
+              type="button"
+              className="status-banner-dismiss"
+              aria-label="Dismiss message"
               onClick={() => {
                 setError(null)
                 setNotice(null)
-              }}
-              style={{
-                float: 'right',
-                border: 0,
-                background: 'transparent',
-                cursor: 'pointer',
               }}
             >
               ✕
