@@ -83,7 +83,7 @@ describe('layout landmarks (C2)', () => {
 
     await user.selectOptions(switcher, 'r2')
 
-    expect(await screen.findByRole('button', { name: 'r2.py' })).toBeInTheDocument()
+    expect(await screen.findByRole('treeitem', { name: 'r2.py' })).toBeInTheDocument()
   })
 })
 

@@ -32,16 +32,16 @@ export default function FileDetails({
 
   if (!node || node.kind !== 'file') {
     return (
-      <aside aria-label="File details" className="rounded-sm border border-dashed border-border p-4 text-sm text-fg-muted">
+      <p className="rounded-sm border border-dashed border-border p-4 text-sm text-fg-muted">
         Select a file to see what it imports and which files import it.
-      </aside>
+      </p>
     )
   }
 
   const stats = node.stats
 
   return (
-    <aside aria-labelledby="file-details-heading" className="space-y-4 rounded-sm border border-border bg-surface p-4 lg:sticky lg:top-16 lg:self-start">
+    <section aria-labelledby="file-details-heading" className="space-y-4 rounded-sm border border-border bg-surface p-4 xl:sticky xl:top-16 xl:self-start">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h3 id="file-details-heading" className="font-mono text-md font-semibold break-all">{node.name}</h3>
@@ -118,6 +118,6 @@ export default function FileDetails({
           </Section>
         </>
       )}
-    </aside>
+    </section>
   )
 }

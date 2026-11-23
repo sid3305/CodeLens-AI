@@ -174,6 +174,18 @@ export default function AppShell() {
 
   return (
     <div className="flex min-h-screen bg-bg text-fg">
+      {/* First stop for keyboard users. Moves focus without touching the URL
+          hash, which file addresses use for the line (#L12). */}
+      <a
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault()
+          document.getElementById('main-content')?.focus()
+        }}
+        className="sr-only z-[var(--cl-z-toast)] rounded-sm bg-accent px-3 py-2 text-sm font-medium text-on-accent focus:not-sr-only focus:fixed focus:left-3 focus:top-3"
+      >
+        Skip to main content
+      </a>
       {isDesktop && sidebarOpen && (
         <div className="sticky top-0 h-screen w-72 shrink-0 border-r border-border">{sidebar}</div>
       )}

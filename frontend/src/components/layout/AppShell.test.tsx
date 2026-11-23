@@ -106,8 +106,8 @@ describe('AppShell file selection (D5)', () => {
     const user = userEvent.setup()
     renderWithProviders(<AppRoutes />)
 
-    await user.click(await screen.findByRole('button', { name: 'a.py' }))
-    await user.click(screen.getByRole('button', { name: 'b.py' }))
+    await user.click(await screen.findByRole('treeitem', { name: 'a.py' }))
+    await user.click(screen.getByRole('treeitem', { name: 'b.py' }))
     await screen.findByText('content of b')
     slow.resolve({ repository_id: 'r1', path: 'a.py', content: 'content of a' })
     await new Promise((resolve) => setTimeout(resolve, 20))
@@ -125,11 +125,11 @@ describe('AppShell file selection (D5)', () => {
     const user = userEvent.setup()
     renderWithProviders(<AppRoutes />)
 
-    await user.click(await screen.findByRole('button', { name: 'a.py' }))
+    await user.click(await screen.findByRole('treeitem', { name: 'a.py' }))
     await screen.findByText('content of a.py')
     await user.click(screen.getByRole('link', { name: /^second/i }))
 
-    await screen.findByRole('button', { name: 'c.py' })
+    await screen.findByRole('treeitem', { name: 'c.py' })
     expect(screen.queryByText('content of a.py')).not.toBeInTheDocument()
   })
 })
@@ -205,7 +205,7 @@ describe('AppShell link import focus (X1)', () => {
   it('opens the explorer on the folder the link pointed at', async () => {
     await importLink('src')
 
-    expect(await screen.findByRole('button', { name: 'app.py' })).toBeInTheDocument()
+    expect(await screen.findByRole('treeitem', { name: 'app.py' })).toBeInTheDocument()
   })
 
   it('opens the file the link pointed at', async () => {

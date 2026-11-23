@@ -21,6 +21,8 @@ interface RepositoryTreeProps {
   onSelectFile: (path: string) => void
   /** A new object each time something outside asks to reveal a node (jump to importer). */
   reveal?: { path: string } | null
+  /** Tallest the tree grows before it scrolls, in pixels. */
+  maxHeight?: number
 }
 
 const plural = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`
@@ -107,6 +109,7 @@ export default function RepositoryTree({
   onToggle,
   onSelectFile,
   reveal = null,
+  maxHeight = 560,
 }: RepositoryTreeProps) {
   const viewportRef = useRef<HTMLDivElement>(null)
   const [scrollTop, setScrollTop] = useState(0)
@@ -248,7 +251,8 @@ export default function RepositoryTree({
       aria-activedescendant={active ? `tree-${active.node.id}` : undefined}
       onKeyDown={onKeyDown}
       onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
-      className="relative h-[min(70vh,560px)] min-h-60 overflow-y-auto rounded-sm border border-border bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+      style={{ height: Math.min(rows.length * ROW_HEIGHT + 2, maxHeight) }}
+      className="relative max-h-[70vh] overflow-y-auto rounded-sm border border-border bg-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
     >
       <div style={{ height: rows.length * ROW_HEIGHT }} className="relative">
         {rendered.map((index) => {

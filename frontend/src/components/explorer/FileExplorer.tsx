@@ -1,26 +1,9 @@
-
 import { useMemo, useState } from 'react'
-import type { ReactNode } from 'react'
-import {
-  ChevronDown,
-  ChevronRight,
-  File,
-  FileCode2,
-  FileJson,
-  Folder,
-  FolderOpen,
-  Search,
-} from 'lucide-react'
+import { Folder, Search } from 'lucide-react'
 
 import type { RepositoryFile } from '../../types'
-
-interface TreeNode {
-  name: string
-  path: string
-  type: 'file' | 'folder'
-  extension?: string
-  children: TreeNode[]
-}
+import RepositoryTree from '../architecture/tree/RepositoryTree'
+import { ancestorFolders, buildRepositoryTree, matchingFiles, visibleRows } from '../architecture/tree/model'
 
 interface FileExplorerProps {
   /** Folder (or file) to reveal: it and all its ancestors start expanded. */
@@ -31,64 +14,10 @@ interface FileExplorerProps {
   onSelectFile: (path: string) => void
 }
 
-function buildFileTree(files: RepositoryFile[]): TreeNode[] {
-  const root: TreeNode[] = []
-
-  for (const file of files) {
-    const parts = file.path.split('/').filter(Boolean)
-    let currentLevel = root
-    let currentPath = ''
-
-    parts.forEach((part, index) => {
-      currentPath = currentPath ? `${currentPath}/${part}` : part
-
-      let node = currentLevel.find((item) => item.name === part)
-
-      if (!node) {
-        const isFile = index === parts.length - 1
-
-        node = {
-          name: part,
-          path: currentPath,
-          type: isFile ? 'file' : 'folder',
-          extension: isFile ? file.extension : undefined,
-          children: [],
-        }
-
-        currentLevel.push(node)
-      }
-
-      currentLevel = node.children
-    })
-  }
-
-  const sortNodes = (nodes: TreeNode[]) => {
-    nodes.sort((a, b) => {
-      if (a.type !== b.type) return a.type === 'folder' ? -1 : 1
-      return a.name.localeCompare(b.name)
-    })
-
-    nodes.forEach((node) => sortNodes(node.children))
-  }
-
-  sortNodes(root)
-  return root
-}
-
-function FileIcon({ file }: { file: TreeNode }) {
-  if (file.type === 'folder') return <Folder size={16} />
-
-  if (['.py', '.js', '.jsx', '.ts', '.tsx', '.java', '.cpp', '.c'].includes(file.extension ?? '')) {
-    return <FileCode2 size={16} />
-  }
-
-  if (['.json', '.yaml', '.yml', '.toml'].includes(file.extension ?? '')) {
-    return <FileJson size={16} />
-  }
-
-  return <File size={16} />
-}
-
+/**
+ * The repository's files as an accessible, virtualised tree (the same
+ * component as the Architecture tree, without dependency statistics).
+ */
 export default function FileExplorer({
   focusPath = null,
   files,
@@ -96,81 +25,34 @@ export default function FileExplorer({
   selectedFilePath,
   onSelectFile,
 }: FileExplorerProps) {
-  const [expanded, setExpanded] = useState<string[]>(() => {
-    if (!focusPath) return []
-    const parts = focusPath.split('/').filter(Boolean)
-    return parts.map((_, index) => parts.slice(0, index + 1).join('/'))
-  })
+  const tree = useMemo(() => buildRepositoryTree(files.map((file) => file.path), null), [files])
   const [query, setQuery] = useState('')
 
-  const tree = useMemo(() => buildFileTree(files), [files])
+  const [expanded, setExpanded] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
+    if (focusPath) {
+      // The focus may be a folder (reveal it open) or a file.
+      const parts = focusPath.split('/').filter(Boolean)
+      parts.forEach((_, index) => initial.add(parts.slice(0, index + 1).join('/')))
+    }
+    if (selectedFilePath) for (const folder of ancestorFolders(tree, [selectedFilePath])) initial.add(folder)
+    return initial
+  })
 
-  const toggleFolder = (path: string) => {
-    setExpanded((current) =>
-      current.includes(path)
-        ? current.filter((item) => item !== path)
-        : [...current, path],
-    )
-  }
+  const matches = useMemo(() => matchingFiles(tree, 'all', query), [tree, query])
+  // While searching, every folder holding a match is open.
+  const shownExpanded = useMemo(
+    () => (matches ? new Set([...expanded, ...ancestorFolders(tree, matches)]) : expanded),
+    [expanded, matches, tree],
+  )
+  const rows = useMemo(() => visibleRows(tree, shownExpanded, matches), [tree, shownExpanded, matches])
 
-  const renderFiles = (nodes: TreeNode[], depth = 0): ReactNode =>
-    nodes.map((file) => {
-      const isOpen = expanded.includes(file.path)
-      const isFolder = file.type === 'folder'
-
-      if (query) {
-        const matches = file.name.toLowerCase().includes(query.toLowerCase())
-        const children = renderFiles(file.children, depth + 1)
-
-        if (!matches && file.children.length === 0) return null
-
-        if (!matches && file.children.length > 0) {
-          return <div key={file.path}>{children}</div>
-        }
-      }
-
-      return (
-        <div key={file.path}>
-          <button
-            type="button"
-            aria-expanded={isFolder ? isOpen : undefined}
-            aria-current={selectedFilePath === file.path ? 'page' : undefined}
-            className={`flex h-7 w-full min-w-0 items-center gap-1.5 rounded-sm pr-2 text-left text-sm text-fg-muted hover:bg-surface-hover hover:text-fg ${
-              selectedFilePath === file.path ? 'bg-accent-soft font-medium text-accent-text' : ''
-            }`}
-            style={{ paddingLeft: `${8 + depth * 14}px` }}
-            onClick={() => {
-              if (isFolder) {
-                toggleFolder(file.path)
-              } else {
-                onSelectFile(file.path)
-              }
-            }}
-          >
-            {isFolder ? (
-              isOpen ? (
-                <ChevronDown size={14} />
-              ) : (
-                <ChevronRight size={14} />
-              )
-            ) : (
-              <span className="w-3.5 shrink-0" aria-hidden="true" />
-            )}
-
-            {isFolder && isOpen ? (
-              <FolderOpen size={16} />
-            ) : (
-              <FileIcon file={file} />
-            )}
-
-            <span className="truncate">{file.name}</span>
-          </button>
-
-          {isFolder && isOpen && (
-            <div>{renderFiles(file.children, depth + 1)}</div>
-          )}
-        </div>
-      )
+  const toggle = (path: string, open: boolean) =>
+    setExpanded((current) => {
+      const next = new Set(current)
+      if (open) next.add(path)
+      else next.delete(path)
+      return next
     })
 
   return (
@@ -179,7 +61,6 @@ export default function FileExplorer({
         <Folder size={14} aria-hidden="true" className="shrink-0 text-fg-muted" />
         <span className="truncate">{repositoryName || 'No repository selected'}</span>
       </p>
-
       <div className="relative px-2">
         <label htmlFor="file-search" className="sr-only">Find a file</label>
         <Search size={14} aria-hidden="true" className="pointer-events-none absolute left-4.5 top-1/2 -translate-y-1/2 text-fg-subtle" />
@@ -192,15 +73,23 @@ export default function FileExplorer({
           className="h-8 w-full rounded-sm border border-border-strong bg-surface pl-7 pr-2 text-sm text-fg placeholder:text-fg-subtle"
         />
       </div>
-
-      <div className="px-1">
-        {files.length ? (
-          renderFiles(tree)
-        ) : (
-          <p className="px-2 py-2 text-sm text-fg-muted">No repository files loaded.</p>
-        )}
-      </div>
-
+      {rows.length === 0 ? (
+        <p className="px-2 text-sm text-fg-muted" role="status">
+          {files.length === 0 ? 'No files.' : 'No files match.'}
+        </p>
+      ) : (
+        <div className="px-1">
+          <RepositoryTree
+            label="Files"
+            rows={rows}
+            expanded={shownExpanded}
+            selectedPath={selectedFilePath}
+            onToggle={toggle}
+            onSelectFile={onSelectFile}
+            maxHeight={420}
+          />
+        </div>
+      )}
       <p className="px-2 text-xs text-fg-subtle">{files.length} files</p>
     </div>
   )

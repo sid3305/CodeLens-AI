@@ -175,7 +175,7 @@ describe('deep links restore state (C3)', () => {
   it('the file selected in the tree comes from the address (X2)', async () => {
     renderAt('/repo/r1/architecture?file=src%2Fa.py')
 
-    const panel = await screen.findByRole('complementary', { name: 'a.py' })
+    const panel = await screen.findByRole('region', { name: 'a.py' })
     expect(panel).toBeInTheDocument()
     expect(screen.getByRole('treeitem', { name: /^a\.py/ })).toHaveAttribute('aria-selected', 'true')
   })
@@ -237,8 +237,8 @@ describe('back and forward (C3)', () => {
     renderAt('/repo/r1/issues')
     await screen.findByText('Low finding')
 
-    await user.click(screen.getByRole('button', { name: 'src' }))
-    await user.click(screen.getByRole('button', { name: 'a.py' }))
+    await user.click(screen.getByRole('treeitem', { name: 'src' }))
+    await user.click(screen.getByRole('treeitem', { name: 'a.py' }))
     await screen.findByText(/first line of src\/a\.py/)
     expect(address()).toBe('/repo/r1/files/src/a.py')
 

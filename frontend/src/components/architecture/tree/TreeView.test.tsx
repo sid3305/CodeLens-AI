@@ -203,7 +203,7 @@ describe('side panel (X2)', () => {
     render(<Harness onOpenFile={onOpenFile} />)
 
     await user.click(item(/^c\.py,/))
-    const panel = screen.getByRole('complementary', { name: 'c.py' })
+    const panel = screen.getByRole('region', { name: 'c.py' })
     expect(within(panel).getByText('In an import cycle')).toBeInTheDocument()
 
     await user.click(within(panel).getByRole('button', { name: 'Open pkg/d.py' }))
@@ -225,7 +225,7 @@ describe('side panel (X2)', () => {
     render(<Harness analysis={analysis} />)
 
     await user.click(item(/^leaf\.py,/))
-    const panel = screen.getByRole('complementary', { name: 'leaf.py' })
+    const panel = screen.getByRole('region', { name: 'leaf.py' })
     const imports = within(panel).getByRole('heading', { name: /imports \(3\)/i }).parentElement!
 
     expect(within(imports).getByText('os').previousSibling).toHaveTextContent('stdlib')
@@ -252,7 +252,7 @@ describe('side panel (X2)', () => {
     render(<Harness initial="docs/guide.md" />)
 
     expect(item('guide.md')).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('complementary', { name: 'guide.md' })).toHaveTextContent(/not part of the import analysis/)
+    expect(screen.getByRole('region', { name: 'guide.md' })).toHaveTextContent(/not part of the import analysis/)
   })
 })
 

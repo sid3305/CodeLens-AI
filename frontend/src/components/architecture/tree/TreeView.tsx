@@ -135,7 +135,7 @@ export default function TreeView({
         <span className="text-fg-subtle"> · ↗ imports · ↙ imported by (files in this repository)</span>
       </p>
 
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,22rem)]">
         <div className="min-w-0">
           {rows.length === 0 ? (
             <EmptyState
