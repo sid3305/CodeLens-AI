@@ -257,7 +257,7 @@ describe('AI consent gates every AI action (B6)', () => {
 
     expect(await screen.findByText(/AI is off for this repository/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /generate ai summary/i })).toBeDisabled()
-    expect(screen.getByText(/send up to 16,000 characters of this repository's source code to Groq \(test-model\)/)).toBeInTheDocument()
+    expect(screen.getByText(/send this repository's source code, trimmed to the token limit, to Groq \(test-model\)/)).toBeInTheDocument()
     expect(mockedApi.generateSummary).not.toHaveBeenCalled()
   })
 

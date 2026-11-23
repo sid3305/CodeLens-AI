@@ -1,6 +1,7 @@
 import { ShieldCheck, ShieldOff } from 'lucide-react'
 
-import { useAiConsent, useSetAiConsent } from '../../data/hooks'
+import { useAiConsent, useAiEstimate, useSetAiConsent } from '../../data/hooks'
+import type { AiEstimateQuery } from '../../types'
 import { errorMessage } from '../../services/api'
 import { Button, InlineMessage } from '../ui'
 
@@ -12,8 +13,24 @@ const recipient = (provider: string, model: string) =>
  * until the user allows it, and the note always says what is sent and to
  * which provider. `sends` describes the payload, e.g. "this file".
  */
-export default function AiConsentNotice({ repoId, sends }: { repoId: string; sends: string }) {
+export default function AiConsentNotice({
+  repoId,
+  sends,
+  estimate: estimateQuery = null,
+}: {
+  repoId: string
+  sends: string
+  /** The task to count, so the note can say how many tokens it sends. */
+  estimate?: AiEstimateQuery | null
+}) {
   const consent = useAiConsent(repoId)
+  const estimate = useAiEstimate(repoId, estimateQuery).data
+  const size = estimate
+    ? ` (about ${estimate.input_tokens.toLocaleString()} input tokens, up to ${estimate.output_tokens.toLocaleString()} output tokens)`
+    : ''
+  const overBudget = estimate && !estimate.within_budget
+    ? ` That is over the limit of ${estimate.max_input_tokens.toLocaleString()} input tokens (CODELENS_LLM_MAX_INPUT_TOKENS).`
+    : ''
   const update = useSetAiConsent(repoId)
   const data = consent.data
 
@@ -40,7 +57,7 @@ export default function AiConsentNotice({ repoId, sends }: { repoId: string; sen
           AI is off for this repository.
         </p>
         <p className="text-fg-muted">
-          Allowing it lets CodeLens send {sends} to {to} when you ask. Secrets are redacted and
+          Allowing it lets CodeLens send {sends}{size} to {to} when you ask.{overBudget} Secrets are redacted and
           sensitive files (.env, keys, credentials) are never sent.
         </p>
         <Button size="sm" loading={update.isPending} onClick={() => update.mutate(true)}>
@@ -55,7 +72,7 @@ export default function AiConsentNotice({ repoId, sends }: { repoId: string; sen
     <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-fg-muted" role="note">
       <ShieldCheck size={15} aria-hidden="true" className="text-success" />
       <span>
-        <span className="font-medium text-fg">AI is on.</span> Sends {sends} to {to}.
+        <span className="font-medium text-fg">AI is on.</span> Sends {sends}{size} to {to}.{overBudget}
       </span>
       <button
         type="button"

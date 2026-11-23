@@ -6,6 +6,7 @@ the code is marked as untrusted data.
 
 from utils.llm import call_llm
 from utils.security import redact_secrets
+from utils.token_budget import LlmRequest, max_output_tokens
 
 WINDOW_LINES = 10
 MAX_WINDOW_CHARS = 4000
@@ -47,7 +48,9 @@ def code_window(content: str, line: int | None) -> tuple[str, int, int] | None:
     return numbered[:MAX_WINDOW_CHARS], start, end
 
 
-def run_finding_agent(finding: dict, mode: str, window: tuple[str, int, int] | None) -> str:
+def build_request(finding: dict, mode: str, window: tuple[str, int, int] | None) -> LlmRequest:
+    """The exact request for this finding (used to estimate and to send)."""
+
     if mode not in TASKS:
         raise ValueError("Unknown request.")
 
@@ -68,9 +71,17 @@ def run_finding_agent(finding: dict, mode: str, window: tuple[str, int, int] | N
 
     if window:
         text, start, end = window
-        code = f"Code, lines {start}-{end} of {finding.get('file')}:\n<untrusted_code>\n{redact_secrets(text)}\n</untrusted_code>"
+        code = (
+            f"Code, lines {start}-{end} of {finding.get('file')}:\n"
+            f"<untrusted_code>\n{redact_secrets(text)}\n</untrusted_code>"
+        )
     else:
         code = "The code is not included (the file is sensitive, or no line was reported)."
 
     prompt = f"{TASKS[mode]}\n\nFinding:\n{redact_secrets(details)}\n\n{code}"
-    return call_llm(prompt, max_tokens=1200, system=SYSTEM_PROMPT)
+    return LlmRequest(system=SYSTEM_PROMPT, prompt=prompt, max_output=max_output_tokens())
+
+
+def run_finding_agent(finding: dict, mode: str, window: tuple[str, int, int] | None) -> str:
+    request = build_request(finding, mode, window)
+    return call_llm(request.prompt, request.max_output, system=request.system)

@@ -68,7 +68,14 @@ export default function FilePreviewPage({
           aiNotice={
             <AiConsentNotice
               repoId={repository.id}
-              sends="this file (up to 12,000 characters), or only the lines you select,"
+              sends={selection ? `lines ${selection.start}–${selection.end} of this file` : 'this file, trimmed to the token limit,'}
+              estimate={
+                path
+                  ? selection
+                    ? { task: 'explain', file_path: path, start_line: selection.start, end_line: selection.end }
+                    : { task: 'explain', file_path: path }
+                  : null
+              }
             />
           }
           markers={markers}

@@ -35,6 +35,10 @@ code or findings. It runs on your machine and is meant for `localhost` use.
 - **Redacted from everything sent out:** API keys and tokens (AWS, GitHub, Slack, Stripe, Groq,
   OpenAI, Anthropic, Google), JWTs, private keys, passwords in URLs, and values assigned to
   secret-looking names. Paths are repository-relative.
+- **Token budget:** every request is counted before it is sent (about 4 characters per token).
+  The defaults are 3,000 input and 700 output tokens, which fit the smallest free tiers. Change them with
+  `CODELENS_LLM_MAX_INPUT_TOKENS` and `CODELENS_LLM_MAX_OUTPUT_TOKENS`. Over-budget requests are trimmed or refused
+  locally, and a provider's 413/429 is never retried.
 - **Providers:** Groq (hosted) or Ollama (runs locally, so code stays on your machine). Errors shown
   to you never contain provider output, keys or local paths.
 

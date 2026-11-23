@@ -1,6 +1,6 @@
 import { Lightbulb, Sparkles, Wrench } from 'lucide-react'
 
-import { useAiConsent, useFindingAi, useStoredFindingAi } from '../../data/hooks'
+import { useAiConsent, useFindingAi, useFindingEstimates, useStoredFindingAi } from '../../data/hooks'
 import { errorMessage } from '../../services/api'
 import type { Finding, FindingAiMode, FindingAiResponse } from '../../types'
 import MarkdownContent from '../layout/MarkdownContent'
@@ -35,6 +35,8 @@ function Answer({ answer }: { answer: FindingAiResponse }) {
  */
 export default function FindingAi({ finding, repositoryId }: { finding: Finding; repositoryId: string }) {
   const consent = useAiConsent(repositoryId).data
+  const estimates = useFindingEstimates(repositoryId).data
+  const tokens = estimates?.findings[finding.id]
   const ask = useFindingAi(repositoryId, finding.id)
   const explained = useStoredFindingAi(repositoryId, finding.id, 'explain').data
   const fixed = useStoredFindingAi(repositoryId, finding.id, 'fix').data
@@ -70,7 +72,7 @@ export default function FindingAi({ finding, repositoryId }: { finding: Finding;
       </div>
       <p className="text-xs text-fg-subtle">
         {allowed
-          ? `Sends ${payload} to ${recipient}. Secrets are redacted; code from sensitive files is never sent.`
+          ? `Sends ${payload}${tokens ? ` (about ${tokens.toLocaleString()} input tokens, up to ${estimates!.output_tokens.toLocaleString()} output tokens)` : ''} to ${recipient}. Secrets are redacted; code from sensitive files is never sent.`
           : 'AI is off for this repository. Allow AI for this repository at the top of the page to use these.'}
       </p>
       {ask.error && <InlineMessage tone="error">{errorMessage(ask.error, 'The AI request failed.')}</InlineMessage>}

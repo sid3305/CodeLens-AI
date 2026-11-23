@@ -54,6 +54,23 @@ class FindingAiResponse(BaseModel):
 MAX_SELECTION_LINES = 400
 
 
+class AiEstimateRequest(BaseModel):
+    """What a task would send, counted without sending it."""
+    task: Literal["summary", "explain", "finding"]
+    file_path: str | None = None
+    start_line: int | None = Field(None, ge=1)
+    end_line: int | None = Field(None, ge=1)
+    finding_id: str | None = None
+    mode: Literal["explain", "fix"] = "explain"
+
+
+class AiEstimateResponse(BaseModel):
+    input_tokens: int
+    output_tokens: int
+    max_input_tokens: int
+    within_budget: bool
+
+
 class ExplainRequest(BaseModel):
     """Request to explain a file, or only some of its lines (C5)."""
     file_path: str = Field(..., description="Repository-relative file path")

@@ -1,22 +1,28 @@
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Query
 
+from agents import explain_agent, finding_agent, repo_agent
 from agents.explain_agent import run_explain_agent
-from agents.finding_agent import code_window, run_finding_agent
-from agents.repo_agent import MAX_REPOSITORY_CHARS, run_repo_agent
+from agents.finding_agent import run_finding_agent
+from agents.repo_agent import run_repo_agent
 from backend.schemas.ai import (
-    MAX_SELECTION_LINES,
     AiConsentRequest,
     AiConsentResponse,
+    AiEstimateRequest,
+    AiEstimateResponse,
     ExplainRequest,
     ExplainResponse,
     FindingAiRequest,
     FindingAiResponse,
     SummaryResponse,
 )
-from backend.services.analysis_service import get_analysis_results
+from backend.services.ai_payloads import (
+    explain_content,
+    find_finding,
+    finding_window,
+    summary_content,
+)
 from backend.services.repository_service import (
     get_repository,
     get_saved_repository_summary,
@@ -24,10 +30,8 @@ from backend.services.repository_service import (
     save_repository_summary,
     set_ai_consent,
 )
-from utils.file_handler import get_code_files
 from utils.llm import AINotConfiguredError, AIServiceError, provider_info
-from utils.parser import read_file_content
-from utils.security import is_sensitive_file, prepare_content_for_llm, resolve_within
+from utils.token_budget import LlmRequest, max_input_tokens, max_output_tokens
 
 router = APIRouter(
     prefix="/api/repositories",
@@ -74,23 +78,12 @@ def finding_ai(repo_id: str, finding_id: str, request: FindingAiRequest):
 
     require_ai_consent(repository)
 
-    results = get_analysis_results(repo_id)
-    finding = next((item for item in (results or {}).get("findings", []) if item.get("id") == finding_id), None)
+    finding = find_finding(repo_id, finding_id)
     if finding is None:
         raise HTTPException(status_code=404, detail="Finding not found. Run an analysis first.")
 
     relative = finding.get("file") or ""
-    window = None
-    # Sensitive files: the finding is explained without their code.
-    if relative and not is_sensitive_file(relative):
-        try:
-            path = resolve_within(repository["path"], relative)
-            if path.is_file() and path.stat().st_size <= 1024 * 1024:
-                content = read_file_content(str(path))
-                if not content.startswith("Error reading file:"):
-                    window = code_window(content, finding.get("line"))
-        except ValueError:
-            window = None
+    window = finding_window(repository, finding)
 
     try:
         text = run_finding_agent(finding, request.mode, window)
@@ -111,6 +104,57 @@ def finding_ai(repo_id: str, finding_id: str, request: FindingAiRequest):
             "end_line": window[2] if window else None,
         },
     )
+
+
+def _estimate(request: LlmRequest) -> AiEstimateResponse:
+    return AiEstimateResponse(
+        input_tokens=request.input_tokens,
+        output_tokens=request.max_output,
+        max_input_tokens=max_input_tokens(),
+        within_budget=request.input_tokens <= max_input_tokens(),
+    )
+
+
+@router.post("/{repo_id}/ai/estimate", response_model=AiEstimateResponse)
+def estimate_ai_request(repo_id: str, request: AiEstimateRequest):
+    """Count what a task would send. Nothing is sent, so no consent is needed."""
+
+    try:
+        repository = get_repository(repo_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    try:
+        if request.task == "summary":
+            built, _ = repo_agent.build_request(summary_content(repository))
+        elif request.task == "explain":
+            content = explain_content(repository, request.file_path or "", request.start_line, request.end_line)
+            built, _ = explain_agent.build_request(content, request.file_path)
+        else:
+            finding = find_finding(repo_id, request.finding_id or "")
+            if finding is None:
+                raise HTTPException(status_code=404, detail="Finding not found.")
+            built = finding_agent.build_request(finding, request.mode, finding_window(repository, finding))
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error))
+    return _estimate(built)
+
+
+@router.get("/{repo_id}/ai/estimate/findings")
+def estimate_findings(repo_id: str):
+    """Input tokens per finding (explain; a fix request is the same size within a few tokens)."""
+
+    try:
+        repository = get_repository(repo_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    from backend.services.analysis_service import get_analysis_results
+
+    findings = (get_analysis_results(repo_id) or {}).get("findings", [])
+    counts = {
+        item["id"]: finding_agent.build_request(item, "explain", finding_window(repository, item)).input_tokens
+        for item in findings
+    }
+    return {"output_tokens": max_output_tokens(), "max_input_tokens": max_input_tokens(), "findings": counts}
 
 
 @router.get("/{repo_id}/ai-consent", response_model=AiConsentResponse)
@@ -186,41 +230,14 @@ def generate_repository_summary(
 
         require_ai_consent(repository)
 
-        repo_path = repository["path"]
-        repo_root = Path(repo_path).resolve()
-        code_files = get_code_files(repo_root)
-
-        if not code_files:
-            raise ValueError(
-                "No supported code files found in repository."
-            )
-
-        repository_content = ""
-
-        for file_path in code_files:
-            content = read_file_content(file_path)
-
-            if content.startswith("Error reading file:"):
-                continue
-
-            # Repository-relative path: the prompt must not reveal where the
-            # repository is stored on this machine.
-            relative = Path(file_path).relative_to(repo_root).as_posix()
-            # Sensitive files are skipped entirely; the rest is redacted.
-            safe = prepare_content_for_llm(relative, content)
-            if safe is None:
-                continue
-            repository_content += f"\n\nFILE: {relative}\n{safe}"
-
-        if not repository_content.strip():
-            raise ValueError("No readable code content found.")
-
-        summary_text = run_repo_agent(repository_content)
+        content = summary_content(repository)
+        _, trimmed = repo_agent.build_request(content)
+        summary_text = run_repo_agent(content)
 
         summary_data = {
             "summary": summary_text,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "truncated": len(repository_content) > MAX_REPOSITORY_CHARS,
+            "truncated": trimmed,
         }
 
         save_repository_summary(repo_id, summary_data)
@@ -245,38 +262,10 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
     try:
         repository = get_repository(repo_id)
         require_ai_consent(repository)
-        repo_path = repository["path"]
-
-        # Refuses traversal, absolute paths and symlinks/junctions (SEC-07).
-        file_path = resolve_within(repo_path, request.file_path)
-
-        if not file_path.is_file():
-            raise ValueError("File not found.")
-
-        if is_sensitive_file(file_path):
-            raise ValueError("Sensitive files cannot be explained.")
-
-        if file_path.stat().st_size > 1024 * 1024:
-            raise ValueError("File exceeds the maximum allowed size.")
-
-        content = read_file_content(str(file_path))
-        if content.startswith("Error reading file:"):
-            raise ValueError("Unable to read this file.")
-
-        # C5: "Explain selection" sends only the selected lines.
         start, end = request.start_line, request.end_line
-        if (start is None) != (end is None):
-            raise ValueError("Give both the first and the last selected line.")
-        if start is not None:
-            lines = content.splitlines()
-            if end < start or end > len(lines):
-                raise ValueError("The selected lines are not in this file.")
-            if end - start + 1 > MAX_SELECTION_LINES:
-                raise ValueError(f"Select at most {MAX_SELECTION_LINES} lines.")
-            content = "\n".join(lines[start - 1:end])
-
-        # Generate explanation using the explain agent
-        explanation_text = run_explain_agent(content, str(file_path))
+        content = explain_content(repository, request.file_path, start, end)
+        _, trimmed = explain_agent.build_request(content, request.file_path)
+        explanation_text = run_explain_agent(content, request.file_path)
 
         return ExplainResponse(
             repository_id=repo_id,
@@ -285,7 +274,7 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
             end_line=end,
             explanation=explanation_text,
             generated_at=datetime.now(timezone.utc).isoformat(),
-            truncated=len(content) > 12000,
+            truncated=trimmed,
         )
 
     except ValueError as error:

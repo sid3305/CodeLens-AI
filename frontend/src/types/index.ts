@@ -35,6 +35,21 @@ export interface RepositoryLinkPreview {
   url: string
 }
 
+/** What an AI task would send, counted by the backend without sending it. */
+export interface AiEstimate {
+  input_tokens: number
+  output_tokens: number
+  max_input_tokens: number
+  within_budget: boolean
+}
+
+export interface AiEstimateQuery {
+  task: 'summary' | 'explain' | 'finding'
+  file_path?: string
+  start_line?: number
+  end_line?: number
+}
+
 export type FindingAiMode = 'explain' | 'fix'
 
 /** B5: an AI explanation of, or fix for, one finding, and exactly what was sent. */

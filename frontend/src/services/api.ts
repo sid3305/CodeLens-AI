@@ -1,5 +1,7 @@
 import type {
   AiConsent,
+  AiEstimate,
+  AiEstimateQuery,
   FindingAiMode,
   FindingAiResponse,
   Job,
@@ -133,6 +135,16 @@ export const api = {
     const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `codelens-report.${format}`
     return { blob: await response.blob(), filename }
   },
+
+  /** Token counts of what a task would send (nothing is sent). */
+  estimateAi: (repoId: string, query: AiEstimateQuery, signal?: AbortSignal) =>
+    request<AiEstimate>(`${repo(repoId)}/ai/estimate`, { ...json(query), signal }),
+
+  estimateFindings: (repoId: string, signal?: AbortSignal) =>
+    request<{ output_tokens: number; max_input_tokens: number; findings: Record<string, number> }>(
+      `${repo(repoId)}/ai/estimate/findings`,
+      { signal },
+    ),
 
   getAiConsent: (repoId: string, signal?: AbortSignal) =>
     request<AiConsent>(`${repo(repoId)}/ai-consent`, { signal }),

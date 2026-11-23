@@ -24,6 +24,7 @@ from groq import Groq
 # Importing config loads the project's .env file.
 import utils.config  # noqa: F401
 from utils.security import redact_secrets
+from utils.token_budget import LlmRequest, check, max_input_tokens, max_output_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,7 @@ class GroqProvider:
         try:
             client = Groq(api_key=self._api_key)
             response = client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=max_tokens
+                model=self.model, messages=messages, max_tokens=max_tokens, temperature=0
             )
             return response.choices[0].message.content or ""
         except AIServiceError:
@@ -92,10 +93,14 @@ class GroqProvider:
             return AIServiceError("Groq rejected the API key. Check GROQ_API_KEY in .env.")
         if status == 413:
             return AIServiceError(
-                "The request is larger than your Groq plan allows per minute. Try a smaller file or selection, or a higher Groq tier."
+                "Groq refused the request as too large for your plan's per-minute token limit. "
+                f"Lower CODELENS_LLM_MAX_INPUT_TOKENS (now {max_input_tokens()}) or select less code."
             )
         if status == 429 or "ratelimit" in kind:
-            return AIServiceError("Groq is rate limiting requests. Try again in a minute.")
+            return AIServiceError(
+                "Groq's per-minute limit was reached. Wait a minute, or lower "
+                f"CODELENS_LLM_MAX_INPUT_TOKENS (now {max_input_tokens()})."
+            )
         if isinstance(error, (ConnectionError, TimeoutError, OSError)) or "connection" in kind or "timeout" in kind:
             return AIServiceError("Could not reach Groq. Check your connection and try again.")
         return AIServiceError("Groq returned an error. Try again later.")
@@ -119,7 +124,7 @@ class OllamaProvider:
             "model": self.model,
             "messages": messages,
             "stream": False,
-            "options": {"num_predict": max_tokens},
+            "options": {"num_predict": max_tokens, "temperature": 0},
         }).encode("utf-8")
         request = urllib.request.Request(
             self._url, data=body, headers={"Content-Type": "application/json"}, method="POST"
@@ -164,11 +169,21 @@ def provider_info() -> dict[str, object]:
     return {"provider": provider.name, "model": provider.model, "configured": provider.configured, "problem": None}
 
 
-def call_llm(prompt: str, max_tokens: int = 2048, *, system: str | None = None) -> str:
-    """Send one request. Every message is redacted here, whatever the caller did."""
+def call_llm(prompt: str, max_tokens: int | None = None, *, system: str | None = None) -> str:
+    """
+    The one way out. Every message is redacted, the token budget is checked
+    before sending (TokenBudgetError, nothing sent), and the answer length
+    is capped at CODELENS_LLM_MAX_OUTPUT_TOKENS. Never retried.
+    """
 
+    request = LlmRequest(
+        system=redact_secrets(system or ""),
+        prompt=redact_secrets(prompt),
+        max_output=min(max_tokens or max_output_tokens(), max_output_tokens()),
+    )
+    check(request)
     messages = []
-    if system:
-        messages.append({"role": "system", "content": redact_secrets(system)})
-    messages.append({"role": "user", "content": redact_secrets(prompt)})
-    return get_provider().complete(messages, max_tokens)
+    if request.system:
+        messages.append({"role": "system", "content": request.system})
+    messages.append({"role": "user", "content": request.prompt})
+    return get_provider().complete(messages, request.max_output)

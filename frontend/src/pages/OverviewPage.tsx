@@ -10,6 +10,8 @@ import type { Repository } from '../types'
 import OverviewSection from '../components/workspace/OverviewSection'
 import { PageContainer, PageHeader, RunAnalysisButton } from './PageHeader'
 
+const SUMMARY_ESTIMATE = { task: 'summary' } as const
+
 // The export code is only loaded when the panel is opened (X3).
 const ExportPanel = lazy(() => import('../components/export/ExportPanel'))
 
@@ -64,7 +66,8 @@ export default function OverviewPage({ repository }: { repository: Repository })
         aiNotice={
           <AiConsentNotice
             repoId={repository.id}
-            sends="up to 16,000 characters of this repository's source code"
+            sends="this repository's source code, trimmed to the token limit,"
+            estimate={SUMMARY_ESTIMATE}
           />
         }
       />

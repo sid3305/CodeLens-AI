@@ -299,11 +299,13 @@ class _ProviderFailure(Exception):
     ("failure", "expected"),
     [
         (_ProviderFailure(RAW_AUTH, 401), "Groq rejected the API key. Check GROQ_API_KEY in .env."),
-        (_ProviderFailure("Error code: 429 - {'error': 'slow down'}", 429), "Groq is rate limiting requests. Try again in a minute."),
+        (_ProviderFailure("Error code: 429 - {'error': 'slow down'}", 429),
+         "Groq's per-minute limit was reached. Wait a minute, or lower CODELENS_LLM_MAX_INPUT_TOKENS (now 3000)."),
         (ConnectionError("connection to api.groq.com failed"), "Could not reach Groq. Check your connection and try again."),
         (_ProviderFailure("Error code: 500 - {'error': 'internal'}", 500), "Groq returned an error. Try again later."),
         (_ProviderFailure("Error code: 413 - {'error': 'Request too large'}", 413),
-         "The request is larger than your Groq plan allows per minute. Try a smaller file or selection, or a higher Groq tier."),
+         "Groq refused the request as too large for your plan's per-minute token limit. "
+         "Lower CODELENS_LLM_MAX_INPUT_TOKENS (now 3000) or select less code."),
         (ValueError(r"weird failure at C:\Users\someone\secret\path"), "Groq returned an error. Try again later."),
     ],
 )
@@ -395,4 +397,26 @@ def test_explain_selection_rejects_bad_ranges(client, fake_llm, start, end):
     )
 
     assert response.status_code in (400, 422)
+    assert fake_llm.calls == []
+
+
+def test_over_budget_requests_are_refused_before_sending(monkeypatch):
+    sent = []
+    monkeypatch.setattr(utils.llm, "get_provider", lambda: type("P", (), {"complete": lambda self, m, t: sent.append(t) or "ok"})())
+    monkeypatch.setenv("CODELENS_LLM_MAX_INPUT_TOKENS", "100")
+
+    with pytest.raises(ValueError, match="over the limit of 100"):
+        utils.llm.call_llm("x" * 401)
+    assert utils.llm.call_llm("x" * 400, max_tokens=5000) == "ok"
+    assert sent == [700]
+
+
+def test_estimate_counts_the_real_payload_and_sends_nothing(client, fake_llm):
+    repo = upload_repo(client, {"app/main.py": "x = 1\n" * 50})
+
+    body = client.post(f"/api/repositories/{repo['id']}/ai/estimate",
+                       json={"task": "explain", "file_path": "app/main.py", "start_line": 1, "end_line": 10}).json()
+
+    assert 0 < body["input_tokens"] < body["max_input_tokens"] == 3000
+    assert body["output_tokens"] == 700 and body["within_budget"] is True
     assert fake_llm.calls == []

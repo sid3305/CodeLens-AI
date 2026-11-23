@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../services/api'
 import type {
   AiConsent,
+  AiEstimateQuery,
   ExplainResponse,
   FindingAiMode,
   FindingAiResponse,
@@ -95,6 +96,25 @@ export function useAiConsent(repoId: string) {
   return useQuery({
     queryKey: queryKeys.aiConsent(repoId),
     queryFn: ({ signal }) => api.getAiConsent(repoId, signal),
+  })
+}
+
+/** Token counts of what a task would send; null query: nothing to estimate. */
+export function useAiEstimate(repoId: string, query: AiEstimateQuery | null) {
+  return useQuery({
+    queryKey: ['repository', repoId, 'ai-estimate', query],
+    queryFn: ({ signal }) => api.estimateAi(repoId, query!, signal),
+    enabled: query !== null,
+    retry: false,
+  })
+}
+
+/** Input tokens per finding for the Issues page (one request). */
+export function useFindingEstimates(repoId: string) {
+  return useQuery({
+    queryKey: ['repository', repoId, 'ai-estimate', 'findings'],
+    queryFn: ({ signal }) => api.estimateFindings(repoId, signal),
+    retry: false,
   })
 }
 
