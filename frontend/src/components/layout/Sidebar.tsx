@@ -2,7 +2,6 @@ import {
   Bug,
   ChevronDown,
   ChevronRight,
-  Code2,
   FolderGit2,
   LayoutDashboard,
   Network,
@@ -16,6 +15,7 @@ import type { ReactNode } from 'react'
 
 import type { Repository, RepositoryFile, WorkspaceSection } from '../../types'
 import type { NavSection } from '../../app/paths'
+import { LogoMark } from '../brand/Logo'
 import FileExplorer from '../explorer/FileExplorer'
 import ImportPanel from '../import/ImportPanel'
 import { Button, IconButton, cn } from '../ui'
@@ -101,12 +101,7 @@ export default function Sidebar({
   return (
     <aside aria-label="Workspace navigation" className="flex h-full min-h-0 flex-col bg-surface">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
-        <span
-          className="flex size-8 items-center justify-center rounded-sm bg-accent text-on-accent"
-          aria-hidden="true"
-        >
-          <Code2 size={17} />
-        </span>
+        <LogoMark size={32} />
         <span className="text-md font-semibold tracking-tight">
           CodeLens <span className="text-accent-text">AI</span>
         </span>
