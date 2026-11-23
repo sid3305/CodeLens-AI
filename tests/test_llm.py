@@ -41,7 +41,7 @@ def _reply(text):
 
 
 def test_missing_key_is_reported():
-    with pytest.raises(ValueError, match="GROQ_API_KEY"):
+    with pytest.raises(utils.llm.AINotConfiguredError, match="GROQ_API_KEY"):
         utils.llm.call_llm("hi")
 
 
@@ -63,7 +63,8 @@ def test_provider_errors_are_wrapped(monkeypatch):
 
     _install(monkeypatch, fail)
 
-    with pytest.raises(RuntimeError, match="network down"):
+    # B6: a clean message, not the provider's own text.
+    with pytest.raises(utils.llm.AIServiceError, match="^Could not reach Groq"):
         utils.llm.call_llm("prompt")
 
 

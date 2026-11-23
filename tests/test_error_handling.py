@@ -5,7 +5,7 @@ import logging
 import pytest
 
 from backend.services import dependency_service
-from tests.helpers import upload_repo
+from tests.helpers import allow_ai, upload_repo
 
 SECRET = "C:/Users/someone/private/path"
 
@@ -15,6 +15,7 @@ SECRET = "C:/Users/someone/private/path"
 )
 def test_dependency_errors_do_not_leak_details(client, monkeypatch, caplog, suffix):
     repo = upload_repo(client)
+    allow_ai(client, repo)
 
     def explode(*_args, **_kwargs):
         raise KeyError(SECRET)
@@ -33,6 +34,7 @@ def test_unexpected_ai_errors_are_logged(client, monkeypatch, caplog):
     from backend.routers import ai as ai_router
 
     repo = upload_repo(client)
+    allow_ai(client, repo)
 
     def explode(*_args, **_kwargs):
         raise KeyError(SECRET)

@@ -16,6 +16,8 @@ vi.mock('../services/api', async (importOriginal) => {
       getFiles: vi.fn(),
       getAnalysisResults: vi.fn(),
       getSummary: vi.fn(),
+      getAiConsent: vi.fn(async (id: string) => ({ repository_id: id, enabled: true, provider: 'Groq', model: 'test-model', configured: true, problem: null })),
+      setAiConsent: vi.fn(),
       generateSummary: vi.fn(),
       getFileContent: vi.fn(),
       explainFile: vi.fn(),
@@ -63,6 +65,7 @@ const preview = (path: string | null) => (
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockedApi.getAiConsent.mockImplementation(async (id: string) => ({ repository_id: id, enabled: true, provider: 'Groq', model: 'test-model', configured: true, problem: null }))
   mockedApi.getFiles.mockImplementation(async (id: string) => ({ repository_id: id, total_files: 0, files: [] }))
   mockedApi.getAnalysisResults.mockResolvedValue(null)
   mockedApi.getSummary.mockResolvedValue(null)
@@ -236,5 +239,39 @@ describe('File preview explanation (A1 / BUG-04, C4)', () => {
 
     expect(screen.queryByText('content of a.py')).not.toBeInTheDocument()
     expect(screen.getByText('content of b.py')).toBeInTheDocument()
+  })
+})
+
+describe('AI consent gates every AI action (B6)', () => {
+  beforeEach(() => {
+    mockedApi.getAiConsent.mockImplementation(async (id: string) => ({ repository_id: id, enabled: false, provider: 'Groq', model: 'test-model', configured: true, problem: null }))
+  })
+
+  it('the summary cannot be generated until AI is allowed', async () => {
+    renderWithProviders(overview(repoA))
+
+    expect(await screen.findByText(/AI is off for this repository/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /generate ai summary/i })).toBeDisabled()
+    expect(screen.getByText(/send up to 30,000 characters of this repository's source code to Groq \(test-model\)/)).toBeInTheDocument()
+    expect(mockedApi.generateSummary).not.toHaveBeenCalled()
+  })
+
+  it('a file cannot be explained until AI is allowed', async () => {
+    renderWithProviders(preview('a.py'))
+
+    expect(await screen.findByText(/AI is off for this repository/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /explain this file/i })).toBeDisabled()
+    expect(mockedApi.explainFile).not.toHaveBeenCalled()
+  })
+
+  it('allowing AI enables the action without sending anything by itself', async () => {
+    mockedApi.setAiConsent.mockImplementation(async (id: string, enabled: boolean) => ({ repository_id: id, enabled, provider: 'Groq', model: 'test-model', configured: true, problem: null }))
+    const user = userEvent.setup()
+    renderWithProviders(preview('a.py'))
+
+    await user.click(await screen.findByRole('button', { name: 'Allow AI for this repository' }))
+
+    await waitFor(() => expect(screen.getByRole('button', { name: /explain this file/i })).toBeEnabled())
+    expect(mockedApi.explainFile).not.toHaveBeenCalled()
   })
 })

@@ -14,6 +14,20 @@ class SummaryResponse(BaseModel):
     truncated: bool = False
 
 
+class AiConsentRequest(BaseModel):
+    enabled: bool
+
+
+class AiConsentResponse(BaseModel):
+    """Whether AI is on for a repository, and who would receive the code."""
+    repository_id: str
+    enabled: bool
+    provider: str
+    model: str
+    configured: bool
+    problem: str | None = None
+
+
 class ExplainRequest(BaseModel):
     """Request to explain a specific file."""
     file_path: str = Field(..., description="Repository-relative file path")

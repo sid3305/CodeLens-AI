@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 
 from utils.config import get_upload_dir
 from utils.repo_url import RepositoryURL, parse_repository_url
-from utils.security import is_link
+from utils.security import is_link, is_sensitive_file
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +44,6 @@ IGNORED_FOLDERS = {
     "coverage", ".tox"
 }
 
-SENSITIVE_FILENAMES = {
-    ".env", ".env.local", ".env.production",
-    "id_rsa", "id_ed25519",
-    "credentials.json", "secrets.json",
-    "service-account.json"
-}
 
 
 # ---------------- WORKSPACE ----------------
@@ -398,10 +392,7 @@ def get_code_files(folder_path, include_patterns=()):
 
             file_path = Path(root) / filename
 
-            if filename.lower() in SENSITIVE_FILENAMES or is_link(file_path):
-                continue
-
-            if filename.lower().startswith(".env"):
+            if is_sensitive_file(file_path) or is_link(file_path):
                 continue
 
             if file_path.suffix.lower() not in SUPPORTED_EXTENSIONS and not any(

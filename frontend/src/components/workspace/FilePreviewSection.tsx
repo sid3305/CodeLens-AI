@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { FileCode2, RefreshCw, Sparkles } from 'lucide-react'
 
 import CodeLines from '../code/CodeLines'
@@ -12,6 +13,8 @@ export default function FilePreviewSection({
   explanationError,
   explaining,
   onExplain,
+  aiAllowed,
+  aiNotice,
 }: {
   path: string | null
   content: string | null
@@ -20,6 +23,9 @@ export default function FilePreviewSection({
   explanationError: string | null
   explaining: boolean
   onExplain: () => void
+  /** B6: AI may only run after the user allowed it for this repository. */
+  aiAllowed: boolean
+  aiNotice: ReactNode
 }) {
   if (!path) {
     return (
@@ -46,6 +52,7 @@ export default function FilePreviewSection({
                 variant={explanation ? 'secondary' : 'primary'}
                 icon={explanation ? <RefreshCw size={14} aria-hidden="true" /> : <Sparkles size={14} aria-hidden="true" />}
                 loading={explaining}
+                disabled={!aiAllowed}
                 onClick={onExplain}
               >
                 {explaining ? 'Explaining…' : explanation ? 'Regenerate explanation' : 'Explain this file'}
@@ -53,6 +60,7 @@ export default function FilePreviewSection({
             )
           }
         />
+        {content !== null && <div className="px-4 pt-3 sm:px-5">{aiNotice}</div>}
         {explanationError && (
           <InlineMessage tone="error" className="px-4 pt-3 sm:px-5">{explanationError}</InlineMessage>
         )}

@@ -12,6 +12,7 @@ export const queryKeys = {
   files: (repoId: string) => ['repository', repoId, 'files'] as const,
   analysis: (repoId: string) => ['repository', repoId, 'analysis'] as const,
   summary: (repoId: string) => ['repository', repoId, 'summary'] as const,
+  aiConsent: (repoId: string) => ['repository', repoId, 'ai-consent'] as const,
   dependencies: (repoId: string) => ['repository', repoId, 'dependencies'] as const,
   fileContent: (repoId: string, path: string) => ['repository', repoId, 'file', path] as const,
   explanation: (repoId: string, path: string) => ['repository', repoId, 'explanation', path] as const,

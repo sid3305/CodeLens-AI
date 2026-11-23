@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Activity, Brain, Code2, Files, RefreshCw, ShieldCheck, Sparkles } from 'lucide-react'
 
 import type { AnalysisResponse, RepositoryFile, SummaryResponse } from '../../types'
@@ -29,6 +30,8 @@ export default function OverviewSection({
   summaryError,
   generatingSummary,
   onGenerateSummary,
+  aiAllowed,
+  aiNotice,
 }: {
   files: RepositoryFile[]
   analysis: AnalysisResponse | null
@@ -37,6 +40,10 @@ export default function OverviewSection({
   summaryError: string | null
   generatingSummary: boolean
   onGenerateSummary: (force: boolean) => void
+  /** B6: AI may only run after the user allowed it for this repository. */
+  aiAllowed: boolean
+  /** What is sent and to which provider, with the consent control. */
+  aiNotice: ReactNode
 }) {
   const counts = analysis?.summary.severity_counts ?? {}
   const analyzersRun = outcome
@@ -77,10 +84,12 @@ export default function OverviewSection({
                 <MarkdownContent content={summary.summary} />
               </div>
               {summaryError && <InlineMessage tone="error" className="mt-3">{summaryError}</InlineMessage>}
+              <div className="mt-4">{aiNotice}</div>
               <Button
-                className="mt-4"
+                className="mt-3"
                 icon={<RefreshCw size={14} aria-hidden="true" />}
                 loading={generatingSummary}
+                disabled={!aiAllowed}
                 onClick={() => onGenerateSummary(true)}
               >
                 Regenerate summary
@@ -93,10 +102,7 @@ export default function OverviewSection({
               title="No AI summary yet"
               description={
                 <>
-                  <p>
-                    Generating a summary sends up to 30,000 characters of this
-                    repository&rsquo;s source code (secrets redacted) to the configured AI provider.
-                  </p>
+                  <div className="text-left">{aiNotice}</div>
                   {summaryError && <InlineMessage tone="error" className="mt-3">{summaryError}</InlineMessage>}
                 </>
               }
@@ -104,6 +110,7 @@ export default function OverviewSection({
                 <Button
                   icon={<Sparkles size={14} aria-hidden="true" />}
                   loading={generatingSummary}
+                  disabled={!aiAllowed}
                   onClick={() => onGenerateSummary(false)}
                 >
                   Generate AI summary

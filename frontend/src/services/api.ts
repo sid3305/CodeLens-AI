@@ -1,4 +1,5 @@
 import type {
+  AiConsent,
   AnalysisResponse,
   DependenciesAnalysisResponse,
   ExplainResponse,
@@ -102,6 +103,16 @@ export const api = {
     optional<AnalysisResponse>(`${repo(repoId)}/results`, signal),
 
   /** Previously generated summary, or null. Never calls the LLM. */
+  getAiConsent: (repoId: string, signal?: AbortSignal) =>
+    request<AiConsent>(`${repo(repoId)}/ai-consent`, { signal }),
+
+  setAiConsent: (repoId: string, enabled: boolean) =>
+    request<AiConsent>(`${repo(repoId)}/ai-consent`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    }),
+
   getSummary: (repoId: string, signal?: AbortSignal) =>
     // null (200) until a summary is generated; 404 only for an unknown repository.
     request<SummaryResponse | null>(`${repo(repoId)}/summary`, { signal }),

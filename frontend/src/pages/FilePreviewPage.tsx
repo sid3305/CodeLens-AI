@@ -1,4 +1,5 @@
-import { useExplainFile, useFileContent, useStoredExplanation } from '../data/hooks'
+import { useAiAllowed, useExplainFile, useFileContent, useStoredExplanation } from '../data/hooks'
+import AiConsentNotice from '../components/ai/AiConsent'
 import { errorMessage } from '../services/api'
 import type { Repository } from '../types'
 import FilePreviewSection from '../components/workspace/FilePreviewSection'
@@ -21,6 +22,7 @@ export default function FilePreviewPage({
   const content = useFileContent(repository.id, path)
   const stored = useStoredExplanation(repository.id, path ?? '')
   const explain = useExplainFile(repository.id)
+  const aiAllowed = useAiAllowed(repository.id)
 
   return (
     <PageContainer>
@@ -36,6 +38,8 @@ export default function FilePreviewPage({
           explanationError={explain.error ? errorMessage(explain.error, 'Failed to explain this file.') : null}
           explaining={explain.isPending}
           onExplain={() => path && explain.mutate(path)}
+          aiAllowed={aiAllowed}
+          aiNotice={<AiConsentNotice repoId={repository.id} sends="this file (up to 12,000 characters)" />}
         />
       )}
     </PageContainer>

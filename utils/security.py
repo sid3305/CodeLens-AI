@@ -7,28 +7,45 @@ from pathlib import Path
 # -----------------------------------
 
 SENSITIVE_FILENAMES = {
-    ".env",
-    ".env.local",
-    ".env.production",
-    ".env.development",
     "credentials.json",
-    "secrets.json",
     "service-account.json",
-    "id_rsa",
-    "id_ed25519"
+    ".npmrc",
+    ".pypirc",
+    ".netrc",
+    ".git-credentials",
+    ".htpasswd",
+    ".pgpass",
 }
+
+# Key and certificate containers.
+SENSITIVE_SUFFIXES = {".pem", ".key", ".p12", ".pfx", ".jks", ".keystore"}
+
+# SSH private and public keys.
+SSH_KEY_NAMES = {"id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "id_ecdsa_sk", "id_ed25519_sk"}
 
 
 def is_sensitive_file(file_path):
-    """Check whether a file should be excluded entirely."""
+    """
+    Whether a file must never be listed, previewed or sent to an LLM:
+    dotenv files, package-manager and git credentials, SSH keys (id_*),
+    key/certificate files, secrets.* and AWS credentials.
+    """
 
-    path = Path(file_path)
+    path = Path(str(file_path).replace("\\", "/"))
     filename = path.name.lower()
+    parts = [part.lower() for part in path.parts]
 
-    if filename in SENSITIVE_FILENAMES:
+    if filename in SENSITIVE_FILENAMES or filename.startswith(".env"):
         return True
-
-    return filename.startswith(".env")
+    if filename.split(".")[0] in SSH_KEY_NAMES:
+        return True
+    if path.suffix.lower() in SENSITIVE_SUFFIXES:
+        return True
+    # secrets.json, secrets.yaml, secrets.toml, secrets.py ...
+    if filename.startswith("secrets."):
+        return True
+    # ~/.aws/credentials and ~/.aws/config.
+    return len(parts) >= 2 and parts[-2] == ".aws" and filename in {"credentials", "config"}
 
 
 # -----------------------------------
@@ -37,56 +54,42 @@ def is_sensitive_file(file_path):
 
 SECRET_PATTERNS = [
 
-    # API keys and tokens
+    # Private keys of any kind (RSA, EC, OPENSSH, ENCRYPTED, DSA, PGP blocks).
     (
-        (
-            r'(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|'
-            r'client[_-]?secret)\s*[:=]\s*["\']?[^"\'\s,;]+'
-        ),
-        r'\1=[REDACTED]'
+        r"-----BEGIN [A-Z ]*PRIVATE KEY(?: BLOCK)?-----.*?-----END [A-Z ]*PRIVATE KEY(?: BLOCK)?-----",
+        "[REDACTED_PRIVATE_KEY]",
     ),
 
-    # Passwords
-    (
-        r'(?i)(password|passwd|pwd)\s*[:=]\s*["\']?[^"\'\s,;]+',
-        r'\1=[REDACTED]'
-    ),
+    # Credentials in URLs: scheme://user:password@host
+    (r"(?i)\b([a-z][a-z0-9+.\-]*://[^\s:/@]+):[^\s@/]+@", r"\1:[REDACTED]@"),
 
-    # Common cloud credentials
-    (
-        (
-            r'(?i)(aws_secret_access_key|aws_access_key_id)\s*[:=]\s*'
-            r'["\']?[^"\'\s,;]+'
-        ),
-        r'\1=[REDACTED]'
-    ),
-
-    # GitHub personal access tokens
-    (
-        r'gh[pousr]_[A-Za-z0-9_]{20,}',
-        '[REDACTED_GITHUB_TOKEN]'
-    ),
-
-    # Google API keys
-    (
-        r'AIza[0-9A-Za-z\-_]{30,}',
-        '[REDACTED_GOOGLE_API_KEY]'
-    ),
-
-    # Private key blocks
-    (
-        (
-            r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
-            r'.*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----'
-        ),
-        '[REDACTED_PRIVATE_KEY]'
-    ),
+    # Provider tokens (their prefixes are distinctive enough to match alone).
+    (r"\bAKIA[0-9A-Z]{16}\b", "[REDACTED_AWS_KEY_ID]"),
+    (r"\bxox[abposr]-[A-Za-z0-9-]{10,}", "[REDACTED_SLACK_TOKEN]"),
+    (r"\b[rs]k_(?:live|test)_[A-Za-z0-9]{16,}", "[REDACTED_STRIPE_KEY]"),
+    (r"\bgsk_[A-Za-z0-9]{20,}", "[REDACTED_GROQ_KEY]"),
+    (r"\bsk-ant-[A-Za-z0-9_\-]{20,}", "[REDACTED_ANTHROPIC_KEY]"),
+    (r"\bsk-(?:proj-|svcacct-)?[A-Za-z0-9_\-]{20,}", "[REDACTED_OPENAI_KEY]"),
+    (r"\bgh[pousr]_[A-Za-z0-9_]{20,}", "[REDACTED_GITHUB_TOKEN]"),
+    (r"\bgithub_pat_[A-Za-z0-9_]{20,}", "[REDACTED_GITHUB_TOKEN]"),
+    (r"\bAIza[0-9A-Za-z\-_]{30,}", "[REDACTED_GOOGLE_API_KEY]"),
+    (r"\beyJ[A-Za-z0-9_\-]{8,}\.eyJ[A-Za-z0-9_\-]{8,}\.[A-Za-z0-9_\-]{8,}", "[REDACTED_JWT]"),
 
     # Bearer tokens
+    (r"(?i)Bearer\s+[A-Za-z0-9._\-]+", "Bearer [REDACTED]"),
+
+    # Values assigned to secret-looking names, in code, config and JSON:
+    #   api_key = "...", "apiKey": "...", SECRET_KEY = ..., token: ..., password=...
     (
-        r'(?i)Bearer\s+[A-Za-z0-9._\-]+',
-        'Bearer [REDACTED]'
-    )
+        (
+            r"(?i)([A-Za-z0-9_.\-]*?"
+            r"(?:api[_-]?key|access[_-]?key|secret[_-]?key|private[_-]?key|client[_-]?secret"
+            r"|access[_-]?token|auth[_-]?token|refresh[_-]?token|token|secret"
+            r"|password|passwd|pwd)"
+            r"[\"']?\s*[:=]\s*)([\"']?)[^\"'\s,;]{4,}\2"
+        ),
+        r"\1\2[REDACTED]\2",
+    ),
 ]
 
 

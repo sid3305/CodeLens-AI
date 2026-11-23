@@ -33,3 +33,11 @@ def upload_repo(client, files=None, *, name="sample.zip", prefix="sample/"):
     )
     assert response.status_code == 200, response.text
     return response.json()
+
+
+def allow_ai(client, repo):
+    """Give the per-repository consent every AI route requires (B6)."""
+
+    response = client.put(f"/api/repositories/{repo['id']}/ai-consent", json={"enabled": True})
+    assert response.status_code == 200, response.text
+    return response.json()

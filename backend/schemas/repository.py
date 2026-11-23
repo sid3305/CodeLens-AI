@@ -19,6 +19,8 @@ class RepositoryResponse(BaseModel):
     ref: str | None = None
     focus_path: str | None = None
     source_url: str | None = None
+    # B6: whether this repository's code may be sent to the AI provider.
+    ai_consent: bool = False
 
 
 class RepositoryLinkPreview(BaseModel):

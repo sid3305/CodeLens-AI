@@ -19,6 +19,8 @@ export interface Repository {
   /** Folder or file the link pointed at, opened after import. */
   focus_path?: string | null
   source_url?: string | null
+  /** B6: AI allowed for this repository (off by default). */
+  ai_consent?: boolean
 }
 
 /** Normalised form of a pasted repository link (no clone performed). */
@@ -31,6 +33,17 @@ export interface RepositoryLinkPreview {
   focus_path: string | null
   display: string
   url: string
+}
+
+/** B6: whether this repository's code may be sent to the AI provider, and who that is. */
+export interface AiConsent {
+  repository_id: string
+  enabled: boolean
+  provider: string
+  model: string
+  /** False until the provider is set up (e.g. GROQ_API_KEY). */
+  configured: boolean
+  problem: string | null
 }
 
 export interface RepositoryFile {

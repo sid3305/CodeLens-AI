@@ -6,7 +6,8 @@ from pathlib import Path
 import pytest
 
 from backend.services import repository_service
-from tests.helpers import make_zip, upload_repo
+from tests.helpers import allow_ai, make_zip, upload_repo
+from utils.llm import AIServiceError
 
 FILES = {
     "app/main.py": "import os\npassword = 'hunter2'\n",
@@ -18,7 +19,11 @@ FILES = {
 
 @pytest.fixture
 def repo(client):
-    return upload_repo(client, FILES)
+    # AI consent is on: these tests are about what is sent once it is allowed
+    # (consent itself is covered in test_privacy.py).
+    record = upload_repo(client, FILES)
+    allow_ai(client, record)
+    return record
 
 
 def _repo_path(repo_id):
@@ -165,12 +170,21 @@ def test_explain_guards(client, repo, fake_llm, path, message):
 
 
 def test_explain_reports_provider_errors(client, repo, fake_llm):
-    fake_llm.error = RuntimeError("Groq API Error: rate limited")
+    fake_llm.error = AIServiceError("Groq is rate limiting requests. Try again in a minute.")
 
     response = _explain(client, repo["id"], "app/main.py")
 
     assert response.status_code == 502
-    assert "rate limited" in response.json()["detail"]
+    assert response.json()["detail"] == "Groq is rate limiting requests. Try again in a minute."
+
+
+def test_unexpected_ai_runtime_errors_never_show_raw_text(client, repo, fake_llm):
+    fake_llm.error = RuntimeError("Groq API Error: {'error': 'gsk_leaked'}")
+
+    response = _explain(client, repo["id"], "app/main.py")
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "The AI request failed. Try again later."
 
 
 def test_explain_marks_truncated_files(client, repo, fake_llm):
@@ -203,7 +217,7 @@ def test_summary_never_sends_sensitive_files(client, repo, fake_llm):
 
 
 def test_summary_provider_errors_are_502(client, repo, fake_llm):
-    fake_llm.error = RuntimeError("Groq API Error: down")
+    fake_llm.error = AIServiceError("Groq returned an error. Try again later.")
 
     response = client.post(f"/api/repositories/{repo['id']}/summary")
 

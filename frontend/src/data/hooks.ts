@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '../services/api'
-import type { AnalysisResponse, ExplainResponse, Repository, SummaryResponse } from '../types'
+import type { AiConsent, AnalysisResponse, ExplainResponse, Repository, SummaryResponse } from '../types'
 import { queryKeys } from './queryClient'
 
 const HEALTH_INTERVAL_MS = 30_000
@@ -79,7 +79,34 @@ export function useDependencies(repoId: string) {
   })
 }
 
+/** B6: AI consent for a repository and the provider that would receive code. */
+export function useAiConsent(repoId: string) {
+  return useQuery({
+    queryKey: queryKeys.aiConsent(repoId),
+    queryFn: ({ signal }) => api.getAiConsent(repoId, signal),
+  })
+}
+
+/** True only when the user allowed AI here and the provider is set up. */
+export function useAiAllowed(repoId: string): boolean {
+  const consent = useAiConsent(repoId).data
+  return Boolean(consent?.enabled && consent.configured)
+}
+
 // --- Writes -----------------------------------------------------------------
+
+export function useSetAiConsent(repoId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) => api.setAiConsent(repoId, enabled),
+    onSuccess: (consent: AiConsent) => {
+      client.setQueryData(queryKeys.aiConsent(repoId), consent)
+      client.setQueryData<Repository[]>(queryKeys.repositories, (current) =>
+        current?.map((item) => (item.id === repoId ? { ...item, ai_consent: consent.enabled } : item)),
+      )
+    },
+  })
+}
 
 export function useRunAnalysis(repoId: string) {
   const client = useQueryClient()

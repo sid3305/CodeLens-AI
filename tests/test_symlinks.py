@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from backend.services import repository_service
-from tests.helpers import upload_repo
+from tests.helpers import allow_ai, upload_repo
 from utils import file_handler
 from utils.file_handler import get_code_files
 from utils.security import is_link, resolve_within
@@ -115,6 +115,7 @@ def test_junctions_are_detected(tmp_path, outside):
 @windows_only
 def test_junction_contents_are_never_listed_or_served(client, repo, outside, fake_llm):
     record, root = repo
+    allow_ai(client, record)
     _make_junction(root / "linked", outside)
 
     listed = [Path(p).relative_to(root).as_posix() for p in get_code_files(root)]

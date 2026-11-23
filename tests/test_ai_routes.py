@@ -1,8 +1,9 @@
-from tests.helpers import upload_repo
+from tests.helpers import allow_ai, upload_repo
 
 
 def test_summary_is_cached_without_force(client, fake_llm):
     repo = upload_repo(client)
+    allow_ai(client, repo)
     url = f"/api/repositories/{repo['id']}/summary"
 
     fake_llm.response = "first"
@@ -17,6 +18,7 @@ def test_force_regenerates_summary(client, fake_llm):
     """A2 / BUG-05: Regenerate must call the LLM again and persist the result."""
 
     repo = upload_repo(client)
+    allow_ai(client, repo)
     url = f"/api/repositories/{repo['id']}/summary"
 
     fake_llm.response = "first"

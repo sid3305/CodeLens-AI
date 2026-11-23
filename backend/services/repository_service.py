@@ -340,6 +340,27 @@ def save_repository_summary(repo_id: str, summary_data: dict):
     return summary_data
 
 
+def set_ai_consent(repo_id: str, enabled: bool) -> bool:
+    """Record whether this repository's code may be sent to the AI provider (B6)."""
+
+    with _registry_lock:
+        registry = _load_registry()
+
+        if repo_id not in registry:
+            raise ValueError("Repository not found.")
+
+        registry[repo_id]["ai_consent"] = bool(enabled)
+        _save_registry(registry)
+
+    return bool(enabled)
+
+
+def has_ai_consent(repository: dict) -> bool:
+    """Off unless the user turned it on for this repository."""
+
+    return repository.get("ai_consent") is True
+
+
 def sweep_orphan_workspaces():
     """
     Remove workspace directories that are not in the registry.

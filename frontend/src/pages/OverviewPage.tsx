@@ -1,4 +1,5 @@
-import { useAnalysis, useGenerateSummary, useRepositoryFiles, useSavedSummary } from '../data/hooks'
+import { useAiAllowed, useAnalysis, useGenerateSummary, useRepositoryFiles, useSavedSummary } from '../data/hooks'
+import AiConsentNotice from '../components/ai/AiConsent'
 import { describeAnalysis } from '../lib/analysis'
 import { errorMessage } from '../services/api'
 import type { Repository } from '../types'
@@ -11,6 +12,7 @@ export default function OverviewPage({ repository }: { repository: Repository })
   const analysis = useAnalysis(repository.id)
   const saved = useSavedSummary(repository.id)
   const generate = useGenerateSummary(repository.id)
+  const aiAllowed = useAiAllowed(repository.id)
 
   const result = analysis.data ?? null
   const summaryError = generate.error
@@ -34,6 +36,13 @@ export default function OverviewPage({ repository }: { repository: Repository })
         summaryError={summaryError}
         generatingSummary={generate.isPending}
         onGenerateSummary={(force) => generate.mutate(force)}
+        aiAllowed={aiAllowed}
+        aiNotice={
+          <AiConsentNotice
+            repoId={repository.id}
+            sends="up to 30,000 characters of this repository's source code"
+          />
+        }
       />
     </PageContainer>
   )
