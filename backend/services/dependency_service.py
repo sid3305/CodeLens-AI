@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 CACHE_FILE = "dependencies.json"
 # Bump whenever the report format or the analysis itself changes.
-CACHE_VERSION = 1
+CACHE_VERSION = 2  # 2: stdlib_imports and analyzed_files (X2)
 # The largest max_nodes a client may request; graphs are stored ranked and
 # trimmed per request.
 GRAPH_EXPORT_LIMIT = 500

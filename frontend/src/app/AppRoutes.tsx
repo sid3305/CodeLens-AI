@@ -5,7 +5,12 @@ import AppShell from '../components/layout/AppShell'
 import { LoadingBlock } from '../components/ui'
 import { useDocumentTitle } from '../hooks/useDocumentTitle'
 import { NotFoundPage, RepositoryNotFoundPage } from '../pages/NotFoundPage'
-import { ARCHITECTURE_VIEWS, type ArchitectureView } from '../pages/architectureViews'
+import {
+  ARCHITECTURE_VIEWS,
+  DEFAULT_ARCHITECTURE_VIEW,
+  architectureSearch,
+  type ArchitectureView,
+} from '../pages/architectureViews'
 import { filtersFromSearch, filtersToSearch, lineFromHash, paths } from './paths'
 import { useRepositoryContext, useShell, type RepositoryContext } from './shellContext'
 
@@ -77,14 +82,18 @@ function ArchitectureRoute() {
   useDocumentTitle('Architecture', repository.name)
 
   const requested = params.get('view') as ArchitectureView | null
-  const view: ArchitectureView = requested && ARCHITECTURE_VIEWS.includes(requested) ? requested : 'overview'
+  const view = requested && ARCHITECTURE_VIEWS.includes(requested) ? requested : DEFAULT_ARCHITECTURE_VIEW
+  const file = params.get('file')
 
   return (
     <ArchitecturePage
       key={repository.id}
       repository={repository}
       view={view}
-      onViewChange={(next) => setParams(next === 'overview' ? {} : { view: next })}
+      onViewChange={(next) => setParams(architectureSearch(next, file))}
+      selectedFile={view === 'tree' ? file : null}
+      // Selecting files in the tree is browsing within the view: replace, do not stack history.
+      onSelectFile={(path) => setParams(architectureSearch('tree', path), { replace: true })}
       onOpenFile={(path) => onOpenFile(repository.id, path)}
     />
   )

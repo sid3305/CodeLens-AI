@@ -180,6 +180,31 @@ def external_dependencies(graph: ImportGraph, root: Path, files: list[str]) -> l
     return sorted(merged.values(), key=lambda item: (-item["import_count"], item["name"]))
 
 
+def stdlib_imports(graph: ImportGraph) -> list[dict[str, Any]]:
+    """
+    Standard-library (and Node.js built-in) modules with the files that
+    import them. ``import_count`` counts statements, like the statistics.
+    """
+
+    merged: dict[tuple[str, str], dict[str, Any]] = {}
+    statements: dict[tuple[str, str], set[tuple[str, int, str]]] = defaultdict(set)
+
+    for item in graph.imports:
+        if item.category != "stdlib":
+            continue
+        name = item.package or item.specifier
+        key = (name, item.language)
+        entry = merged.setdefault(key, {"name": name, "language": item.language, "source_files": set()})
+        entry["source_files"].add(item.source)
+        statements[key].add((item.source, item.line, item.specifier))
+
+    result = [
+        {**entry, "source_files": sorted(entry["source_files"]), "import_count": len(statements[key])}
+        for key, entry in merged.items()
+    ]
+    return sorted(result, key=lambda item: (-item["import_count"], item["name"], item["language"]))
+
+
 # --- Report ------------------------------------------------------------------
 
 
@@ -330,6 +355,8 @@ def build_dependency_report(
         "circular_dependencies": cycles,
         "module_dependencies": modules,
         "external_dependencies": externals,
+        "stdlib_imports": stdlib_imports(graph),
+        "analyzed_files": sorted(graph.files),
         "unresolved_imports": [
             {
                 "file": item.source,

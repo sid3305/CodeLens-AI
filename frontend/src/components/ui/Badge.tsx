@@ -51,19 +51,31 @@ const SEVERITY: Record<Severity, { className: string; Icon: typeof Info }> = {
 
 
 /** Severity label with a distinct icon per level; the text is always shown. */
-export function SeverityBadge({ severity, count }: { severity: string; count?: number }) {
+export function SeverityBadge({
+  severity,
+  count,
+  label,
+  title,
+}: {
+  severity: string
+  count?: number
+  /** Replaces the default text ("High" or "3 High"); the icon and colour stay. */
+  label?: string
+  title?: string
+}) {
   const level = normaliseSeverity(severity)
   const { className, Icon } = SEVERITY[level]
 
   return (
     <span
+      title={title}
       className={cn(
         'inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs font-semibold whitespace-nowrap',
         className,
       )}
     >
       <Icon size={12} aria-hidden="true" />
-      {count !== undefined ? `${count} ${level}` : level}
+      {label ?? (count !== undefined ? `${count} ${level}` : level)}
     </span>
   )
 }

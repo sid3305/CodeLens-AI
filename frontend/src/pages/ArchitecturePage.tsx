@@ -1,6 +1,8 @@
 import { ChevronDown, FileWarning, Files, GitMerge, Package, RefreshCw, Zap } from 'lucide-react'
 
-import { useDependencies, useRefreshDependencies } from '../data/hooks'
+import { useMemo } from 'react'
+
+import { useAnalysis, useDependencies, useRefreshDependencies, useRepositoryFiles } from '../data/hooks'
 import { errorMessage } from '../services/api'
 import type { DependenciesAnalysisResponse, Repository } from '../types'
 import {
@@ -11,6 +13,7 @@ import {
   OverviewTab,
 } from '../components/architecture/DependencyViews'
 import { OpenFileContext } from '../components/architecture/openFile'
+import TreeView from '../components/architecture/tree/TreeView'
 import {
   Badge,
   Button,
@@ -96,14 +99,23 @@ export default function ArchitecturePage({
   repository,
   view,
   onViewChange,
+  selectedFile,
+  onSelectFile,
   onOpenFile,
 }: {
   repository: Repository
   /** The open view; kept in the URL by the route. */
   view: ArchitectureView
   onViewChange: (view: ArchitectureView) => void
+  /** The file shown in the tree's side panel; kept in the URL by the route. */
+  selectedFile: string | null
+  onSelectFile: (path: string | null) => void
   onOpenFile: (path: string) => void
 }) {
+  const files = useRepositoryFiles(repository.id)
+  const findings = useAnalysis(repository.id).data?.findings
+  const filePaths = useMemo(() => files.data?.map((file) => file.path), [files.data])
+  const noFindings = useMemo(() => [], [])
   const dependencies = useDependencies(repository.id)
   const refresh = useRefreshDependencies(repository.id)
 
@@ -153,11 +165,27 @@ export default function ArchitecturePage({
               <CardBody>
                 <Tabs value={view} onValueChange={(value) => onViewChange(value as ArchitectureView)}>
                   <TabsList label="Dependency views">
+                    <TabsTrigger value="tree">Tree</TabsTrigger>
                     <TabsTrigger value="overview">Overview</TabsTrigger>
                     <TabsTrigger value="circular">Circular ({analysis.circular_dependencies.length})</TabsTrigger>
                     <TabsTrigger value="external">External ({analysis.external_dependencies.length})</TabsTrigger>
                     <TabsTrigger value="modules">Modules ({analysis.module_dependencies.length})</TabsTrigger>
                   </TabsList>
+                  <TabsContent value="tree">
+                    {filePaths ? (
+                      <TreeView
+                        filePaths={filePaths}
+                        analysis={analysis}
+                        findings={findings ?? noFindings}
+                        selectedPath={selectedFile}
+                        onSelectFile={onSelectFile}
+                      />
+                    ) : files.error ? (
+                      <InlineMessage tone="error">{errorMessage(files.error, 'Unable to list the repository files.')}</InlineMessage>
+                    ) : (
+                      <LoadingBlock label="Loading files" lines={6} />
+                    )}
+                  </TabsContent>
                   <TabsContent value="overview">
                     <OverviewTab analysis={analysis} onShowCircular={() => onViewChange('circular')} />
                   </TabsContent>

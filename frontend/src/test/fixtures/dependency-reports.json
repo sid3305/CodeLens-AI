@@ -1,0 +1,570 @@
+{
+ "js_cycles": {
+  "files": [
+   "src/components/Button.jsx",
+   "src/components/index.js",
+   "src/heavy.ts",
+   "src/index.js",
+   "src/lazy.ts",
+   "src/types.ts",
+   "src/util.cjs"
+  ],
+  "report": {
+   "analyzed_files": [
+    "src/components/Button.jsx",
+    "src/components/index.js",
+    "src/heavy.ts",
+    "src/index.js",
+    "src/lazy.ts",
+    "src/types.ts",
+    "src/util.cjs"
+   ],
+   "circular_dependencies": [
+    {
+     "cycle": [
+      "src/components/index.js",
+      "src/index.js"
+     ],
+     "cycle_type": "import",
+     "description": "Circular import chain: src/components/index.js -> src/index.js -> src/components/index.js",
+     "files": [
+      "src/components/index.js",
+      "src/index.js"
+     ],
+     "severity": "high"
+    },
+    {
+     "cycle": [
+      "src/heavy.ts",
+      "src/lazy.ts"
+     ],
+     "cycle_type": "import",
+     "description": "Circular import chain: src/heavy.ts -> src/lazy.ts -> src/heavy.ts",
+     "files": [
+      "src/heavy.ts",
+      "src/lazy.ts"
+     ],
+     "severity": "high"
+    }
+   ],
+   "external_dependencies": [
+    {
+     "declared": false,
+     "import_count": 1,
+     "is_dev_dependency": false,
+     "language": "javascript",
+     "name": "react",
+     "source_files": [
+      "src/components/Button.jsx"
+     ],
+     "version": null
+    }
+   ],
+   "module_dependencies": [
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "../util"
+     ],
+     "source_module": "src/components/Button.jsx",
+     "target_module": "src/util.cjs"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "Button"
+     ],
+     "source_module": "src/components/index.js",
+     "target_module": "src/components/Button.jsx"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "appName"
+     ],
+     "source_module": "src/components/index.js",
+     "target_module": "src/index.js"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "load"
+     ],
+     "source_module": "src/heavy.ts",
+     "target_module": "src/lazy.ts"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "Button"
+     ],
+     "source_module": "src/index.js",
+     "target_module": "src/components/index.js"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "./heavy"
+     ],
+     "source_module": "src/lazy.ts",
+     "target_module": "src/heavy.ts"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "Kind"
+     ],
+     "source_module": "src/lazy.ts",
+     "target_module": "src/types.ts"
+    }
+   ],
+   "skipped_files": [],
+   "stdlib_imports": [],
+   "unresolved_imports": []
+  }
+ },
+ "npm_scoped": {
+  "files": [
+   "index.js",
+   "package.json"
+  ],
+  "report": {
+   "analyzed_files": [
+    "index.js"
+   ],
+   "circular_dependencies": [],
+   "external_dependencies": [
+    {
+     "declared": true,
+     "import_count": 2,
+     "is_dev_dependency": false,
+     "language": "javascript",
+     "name": "@scope/pkg",
+     "source_files": [
+      "index.js",
+      "package.json"
+     ],
+     "version": "^1.0.0"
+    },
+    {
+     "declared": true,
+     "import_count": 2,
+     "is_dev_dependency": false,
+     "language": "javascript",
+     "name": "lodash",
+     "source_files": [
+      "index.js",
+      "package.json"
+     ],
+     "version": "4.17.21"
+    },
+    {
+     "declared": false,
+     "import_count": 1,
+     "is_dev_dependency": false,
+     "language": "javascript",
+     "name": "express",
+     "source_files": [
+      "index.js"
+     ],
+     "version": null
+    },
+    {
+     "declared": true,
+     "import_count": 0,
+     "is_dev_dependency": true,
+     "language": "javascript",
+     "name": "vitest",
+     "source_files": [
+      "package.json"
+     ],
+     "version": "^1.0.0"
+    }
+   ],
+   "module_dependencies": [],
+   "skipped_files": [],
+   "stdlib_imports": [
+    {
+     "import_count": 2,
+     "language": "javascript",
+     "name": "fs",
+     "source_files": [
+      "index.js"
+     ]
+    },
+    {
+     "import_count": 1,
+     "language": "javascript",
+     "name": "path",
+     "source_files": [
+      "index.js"
+     ]
+    }
+   ],
+   "unresolved_imports": [
+    {
+     "file": "index.js",
+     "language": "javascript",
+     "line": 8,
+     "reason": "relative import target not found",
+     "specifier": "./missing"
+    },
+    {
+     "file": "index.js",
+     "language": "javascript",
+     "line": 9,
+     "reason": "URL imports are not resolved",
+     "specifier": "https://cdn.example.com/lib.js"
+    }
+   ]
+  }
+ },
+ "py_cycles": {
+  "files": [
+   "pkg/__init__.py",
+   "pkg/a.py",
+   "pkg/b.py",
+   "pkg/c.py",
+   "pkg/d.py",
+   "pkg/e.py",
+   "pkg/leaf.py",
+   "pkg/selfref.py"
+  ],
+  "report": {
+   "analyzed_files": [
+    "pkg/__init__.py",
+    "pkg/a.py",
+    "pkg/b.py",
+    "pkg/c.py",
+    "pkg/d.py",
+    "pkg/e.py",
+    "pkg/leaf.py",
+    "pkg/selfref.py"
+   ],
+   "circular_dependencies": [
+    {
+     "cycle": [
+      "pkg/selfref.py"
+     ],
+     "cycle_type": "import",
+     "description": "Circular import chain: pkg/selfref.py -> pkg/selfref.py",
+     "files": [
+      "pkg/selfref.py"
+     ],
+     "severity": "high"
+    },
+    {
+     "cycle": [
+      "pkg/a.py",
+      "pkg/b.py"
+     ],
+     "cycle_type": "import",
+     "description": "Circular import chain: pkg/a.py -> pkg/b.py -> pkg/a.py",
+     "files": [
+      "pkg/a.py",
+      "pkg/b.py"
+     ],
+     "severity": "high"
+    },
+    {
+     "cycle": [
+      "pkg/c.py",
+      "pkg/d.py",
+      "pkg/e.py"
+     ],
+     "cycle_type": "import",
+     "description": "Circular import chain: pkg/c.py -> pkg/d.py -> pkg/e.py -> pkg/c.py",
+     "files": [
+      "pkg/c.py",
+      "pkg/d.py",
+      "pkg/e.py"
+     ],
+     "severity": "high"
+    }
+   ],
+   "external_dependencies": [],
+   "module_dependencies": [
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "b"
+     ],
+     "source_module": "pkg/a.py",
+     "target_module": "pkg/b.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "VALUE"
+     ],
+     "source_module": "pkg/b.py",
+     "target_module": "pkg/a.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "d"
+     ],
+     "source_module": "pkg/c.py",
+     "target_module": "pkg/d.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "thing"
+     ],
+     "source_module": "pkg/d.py",
+     "target_module": "pkg/e.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "pkg.c"
+     ],
+     "source_module": "pkg/e.py",
+     "target_module": "pkg/c.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "pkg.selfref"
+     ],
+     "source_module": "pkg/selfref.py",
+     "target_module": "pkg/selfref.py"
+    }
+   ],
+   "skipped_files": [],
+   "stdlib_imports": [
+    {
+     "import_count": 1,
+     "language": "python",
+     "name": "os",
+     "source_files": [
+      "pkg/leaf.py"
+     ]
+    }
+   ],
+   "unresolved_imports": []
+  }
+ },
+ "py_relative": {
+  "files": [
+   "app/__init__.py",
+   "app/core/__init__.py",
+   "app/core/config.py",
+   "app/core/engine.py",
+   "app/utils/__init__.py",
+   "app/utils/helpers.py"
+  ],
+  "report": {
+   "analyzed_files": [
+    "app/__init__.py",
+    "app/core/__init__.py",
+    "app/core/config.py",
+    "app/core/engine.py",
+    "app/utils/__init__.py",
+    "app/utils/helpers.py"
+   ],
+   "circular_dependencies": [
+    {
+     "cycle": [
+      "app/__init__.py",
+      "app/core/engine.py"
+     ],
+     "cycle_type": "import",
+     "description": "Circular import chain: app/__init__.py -> app/core/engine.py -> app/__init__.py",
+     "files": [
+      "app/__init__.py",
+      "app/core/engine.py"
+     ],
+     "severity": "high"
+    }
+   ],
+   "external_dependencies": [],
+   "module_dependencies": [
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "engine"
+     ],
+     "source_module": "app/__init__.py",
+     "target_module": "app/core/engine.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "VERSION"
+     ],
+     "source_module": "app/core/engine.py",
+     "target_module": "app/__init__.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "config"
+     ],
+     "source_module": "app/core/engine.py",
+     "target_module": "app/core/config.py"
+    },
+    {
+     "edge_count": 2,
+     "import_type": "internal",
+     "imports": [
+      "helpers",
+      "fmt"
+     ],
+     "source_module": "app/core/engine.py",
+     "target_module": "app/utils/helpers.py"
+    }
+   ],
+   "skipped_files": [],
+   "stdlib_imports": [],
+   "unresolved_imports": [
+    {
+     "file": "app/core/engine.py",
+     "language": "python",
+     "line": 5,
+     "reason": "relative import target not found",
+     "specifier": ".missing_module"
+    },
+    {
+     "file": "app/core/engine.py",
+     "language": "python",
+     "line": 6,
+     "reason": "relative import goes beyond the repository root",
+     "specifier": "...."
+    }
+   ]
+  }
+ },
+ "py_src_layout": {
+  "files": [
+   "pyproject.toml",
+   "src/mypkg/__init__.py",
+   "src/mypkg/core.py",
+   "src/mypkg/util.py",
+   "tests/check_core.py"
+  ],
+  "report": {
+   "analyzed_files": [
+    "src/mypkg/__init__.py",
+    "src/mypkg/core.py",
+    "src/mypkg/util.py",
+    "tests/check_core.py"
+   ],
+   "circular_dependencies": [],
+   "external_dependencies": [],
+   "module_dependencies": [
+    {
+     "edge_count": 2,
+     "import_type": "internal",
+     "imports": [
+      "slug",
+      "mypkg.util"
+     ],
+     "source_module": "src/mypkg/core.py",
+     "target_module": "src/mypkg/util.py"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "core"
+     ],
+     "source_module": "tests/check_core.py",
+     "target_module": "src/mypkg/core.py"
+    }
+   ],
+   "skipped_files": [],
+   "stdlib_imports": [],
+   "unresolved_imports": []
+  }
+ },
+ "ts_paths": {
+  "files": [
+   "src/app.tsx",
+   "src/components/Button.tsx",
+   "src/config.ts",
+   "src/utils/index.ts",
+   "tsconfig.json"
+  ],
+  "report": {
+   "analyzed_files": [
+    "src/app.tsx",
+    "src/components/Button.tsx",
+    "src/config.ts",
+    "src/utils/index.ts"
+   ],
+   "circular_dependencies": [],
+   "external_dependencies": [
+    {
+     "declared": false,
+     "import_count": 1,
+     "is_dev_dependency": false,
+     "language": "javascript",
+     "name": "react",
+     "source_files": [
+      "src/app.tsx"
+     ],
+     "version": null
+    }
+   ],
+   "module_dependencies": [
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "Button"
+     ],
+     "source_module": "src/app.tsx",
+     "target_module": "src/components/Button.tsx"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "cfg"
+     ],
+     "source_module": "src/app.tsx",
+     "target_module": "src/config.ts"
+    },
+    {
+     "edge_count": 1,
+     "import_type": "internal",
+     "imports": [
+      "cap"
+     ],
+     "source_module": "src/app.tsx",
+     "target_module": "src/utils/index.ts"
+    }
+   ],
+   "skipped_files": [],
+   "stdlib_imports": [],
+   "unresolved_imports": [
+    {
+     "file": "src/app.tsx",
+     "language": "typescript",
+     "line": 4,
+     "reason": "path alias matched but its target was not found",
+     "specifier": "@/nope"
+    }
+   ]
+  }
+ }
+}

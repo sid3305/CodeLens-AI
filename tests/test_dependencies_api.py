@@ -115,3 +115,48 @@ def test_internal_module_edges_are_reported(analysis):
 def test_only_repository_relative_paths_are_returned(analysis, upload_root):
     assert str(upload_root) not in str(analysis)
     assert str(upload_root).replace("\\", "\\\\") not in str(analysis)
+
+
+# --- Per-file standard-library imports (X2) ------------------------------------
+
+
+def test_stdlib_imports_are_listed_per_file(analysis):
+    stdlib = {item["name"]: item for item in analysis["stdlib_imports"]}
+
+    assert {"os", "subprocess"} <= set(stdlib)
+    assert stdlib["os"]["source_files"] == ["demo/app.py"]
+    assert stdlib["os"]["language"] == "python"
+    assert stdlib["os"]["import_count"] == 1
+    # Never mixed with third-party packages.
+    assert not set(stdlib) & _externals(analysis)
+
+
+def test_stdlib_count_matches_the_statistics(analysis):
+    statements = sum(item["import_count"] for item in analysis["stdlib_imports"])
+    assert statements == analysis["stats"]["stdlib_imports"]
+
+
+def test_node_builtins_are_stdlib(client):
+    repo = upload_repo(client, {"web/a.js": "import fs from 'node:fs'\nconst path = require('path')\n"})
+    analysis = client.get(f"/api/repositories/{repo['id']}/dependencies").json()
+
+    names = {item["name"] for item in analysis["stdlib_imports"]}
+    assert {"fs", "path"} <= names
+    assert all(item["source_files"] == ["web/a.js"] for item in analysis["stdlib_imports"])
+
+
+def test_analyzed_files_lists_every_source_file(analysis):
+    assert analysis["analyzed_files"] == [
+        "demo/__init__.py", "demo/app.py", "demo/b.py", "web/index.js", "web/util.js",
+    ]
+    # Manifests are read for declarations, not analysed for imports.
+    assert "requirements.txt" not in analysis["analyzed_files"]
+
+
+def test_analyzed_files_is_not_trimmed_with_the_graph(client):
+    files = {f"pkg/m{i:03}.py": "import os\n" for i in range(60)}
+    repo = upload_repo(client, files)
+    analysis = client.get(f"/api/repositories/{repo['id']}/dependencies?max_nodes=50").json()
+
+    assert len(analysis["dependency_graph_data"]["moduleGraph"]["nodes"]) == 50
+    assert analysis["analyzed_files"] == sorted(files)

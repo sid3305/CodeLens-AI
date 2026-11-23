@@ -19,6 +19,15 @@ class ExternalDependency(BaseModel):
     declared: bool = False
 
 
+class StdlibImport(BaseModel):
+    """A standard-library or Node.js built-in module and the files importing it."""
+
+    name: str
+    language: str = ""
+    source_files: list[str] = Field(default_factory=list)
+    import_count: int = 0
+
+
 class ModuleDependency(BaseModel):
     source_module: str
     target_module: str
@@ -85,6 +94,9 @@ class DependenciesAnalysisResponse(BaseModel):
     circular_dependencies: list[CircularDependency] = Field(default_factory=list)
     module_dependencies: list[ModuleDependency] = Field(default_factory=list)
     external_dependencies: list[ExternalDependency] = Field(default_factory=list)
+    stdlib_imports: list[StdlibImport] = Field(default_factory=list)
+    # Every file the import analysis covered (repository-relative, never trimmed).
+    analyzed_files: list[str] = Field(default_factory=list)
     unresolved_imports: list[UnresolvedImport] = Field(default_factory=list)
     skipped_files: list[SkippedFile] = Field(default_factory=list)
     dependency_graph_data: DependenciesGraphData

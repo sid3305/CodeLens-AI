@@ -166,10 +166,31 @@ describe('deep links restore state (C3)', () => {
     expect(screen.getByText('requests')).toBeInTheDocument()
   })
 
-  it('an unknown architecture view falls back to the default', async () => {
+  it('an unknown architecture view falls back to the tree (the default)', async () => {
     renderAt('/repo/r1/architecture?view=bogus')
 
-    expect(await screen.findByRole('tab', { name: /overview/i })).toHaveAttribute('aria-selected', 'true')
+    expect(await screen.findByRole('tab', { name: 'Tree' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('the file selected in the tree comes from the address (X2)', async () => {
+    renderAt('/repo/r1/architecture?file=src%2Fa.py')
+
+    const panel = await screen.findByRole('complementary', { name: 'a.py' })
+    expect(panel).toBeInTheDocument()
+    expect(screen.getByRole('treeitem', { name: /^a\.py/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('selecting a file in the tree updates the address without a new history entry (X2)', async () => {
+    const user = userEvent.setup()
+    renderAt('/repo/r1/overview')
+    await screen.findByRole('heading', { level: 1, name: 'Overview' })
+    await user.click(screen.getByRole('link', { name: 'Architecture' }))
+
+    await user.click(await screen.findByRole('treeitem', { name: /^a\.py/ }))
+    await waitFor(() => expect(address()).toBe('/repo/r1/architecture?file=src%2Fa.py'))
+
+    await user.click(screen.getByRole('button', { name: 'Browser back' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Overview' })).toBeInTheDocument()
   })
 })
 

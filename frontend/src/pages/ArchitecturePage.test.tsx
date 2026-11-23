@@ -11,7 +11,14 @@ import type { ArchitectureView } from './architectureViews'
 
 vi.mock('../services/api', async (importOriginal) => {
   const original = await importOriginal<typeof import('../services/api')>()
-  return { ...original, api: { getDependenciesAnalysis: vi.fn() } }
+  return {
+    ...original,
+    api: {
+      getDependenciesAnalysis: vi.fn(),
+      getFiles: vi.fn(async (id: string) => ({ repository_id: id, total_files: 0, files: [] })),
+      getAnalysisResults: vi.fn(async () => null),
+    },
+  }
 })
 
 const mockedApi = api as unknown as Record<string, ReturnType<typeof vi.fn>>
@@ -58,7 +65,17 @@ const repository: Repository = { id: 'r', name: 'repo', source: 'zip', file_coun
 /** The route keeps the view in the URL; a local state stands in for it here. */
 function Harness({ repo, onOpenFile }: { repo: Repository; onOpenFile: (path: string) => void }) {
   const [view, setView] = useState<ArchitectureView>('overview')
-  return <ArchitecturePage repository={repo} view={view} onViewChange={setView} onOpenFile={onOpenFile} />
+  const [file, setFile] = useState<string | null>(null)
+  return (
+    <ArchitecturePage
+      repository={repo}
+      view={view}
+      onViewChange={setView}
+      selectedFile={file}
+      onSelectFile={setFile}
+      onOpenFile={onOpenFile}
+    />
+  )
 }
 
 function page(repo: Repository = repository, onOpenFile = vi.fn()) {

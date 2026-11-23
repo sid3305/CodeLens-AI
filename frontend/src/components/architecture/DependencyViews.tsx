@@ -19,13 +19,13 @@ function baseName(path: string): string {
  * A repository file shown by name (full path on hover and for screen
  * readers). Opens the file preview when the page provides a handler.
  */
-export function ModuleName({ path }: { path: string }) {
+export function ModuleName({ path, label }: { path: string; label?: string }) {
   const openFile = useContext(OpenFileContext)
 
   if (!openFile) {
     return (
-      <span className="font-mono text-sm text-fg" title={path}>
-        {baseName(path)}
+      <span className="font-mono text-sm break-all text-fg" title={path}>
+        {label ?? baseName(path)}
       </span>
     )
   }
@@ -36,9 +36,9 @@ export function ModuleName({ path }: { path: string }) {
       onClick={() => openFile(path)}
       title={path}
       aria-label={`Open ${path}`}
-      className="rounded-sm font-mono text-sm text-accent-text underline-offset-2 hover:underline"
+      className="rounded-sm text-left font-mono text-sm break-all text-accent-text underline-offset-2 hover:underline"
     >
-      {baseName(path)}
+      {label ?? baseName(path)}
     </button>
   )
 }

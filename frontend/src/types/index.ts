@@ -111,6 +111,14 @@ export interface ExplainResponse {
   truncated: boolean
 }
 
+/** A standard-library / Node.js built-in module and the files importing it. */
+export interface StdlibImport {
+  name: string
+  language: string
+  source_files: string[]
+  import_count: number
+}
+
 export interface ExternalDependency {
   name: string
   source_files: string[]
@@ -211,6 +219,9 @@ export interface DependenciesAnalysisResponse {
   circular_dependencies: CircularDependency[]
   module_dependencies: ModuleDependency[]
   external_dependencies: ExternalDependency[]
+  stdlib_imports?: StdlibImport[]
+  /** Every file the import analysis covered (never trimmed). */
+  analyzed_files?: string[]
   unresolved_imports?: UnresolvedImport[]
   skipped_files?: SkippedFile[]
   dependency_graph_data: DependenciesGraphData
