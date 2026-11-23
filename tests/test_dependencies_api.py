@@ -86,33 +86,28 @@ def test_max_nodes_is_validated(client, repo, max_nodes):
     assert response.status_code == 422
 
 
-# --- Known defects, fixed in Stage 2 -------------------------------------------
+# --- Accuracy (were strict xfail in Stage 1; fixed by B1) ----------------------
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-07: stdlib modules reported as external (Stage 2)")
 def test_stdlib_is_not_external(analysis):
     assert not {"os", "subprocess"} & _externals(analysis)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-06/07: imported symbols reported as packages (Stage 2)")
 def test_imported_symbols_are_not_packages(analysis):
     assert not {"APIRouter", "React", "x", "main", "b", "app"} & _externals(analysis)
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-07: scoped npm packages dropped (Stage 2)")
 def test_scoped_packages_are_kept_from_imports(analysis):
     dep = next(d for d in analysis["external_dependencies"] if d["name"] == "@scope/pkg")
     assert dep["import_count"] >= 1
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-08: import cycles not detected (Stage 2)")
 def test_python_and_js_cycles_are_detected(analysis):
     cycles = [sorted(c["cycle"]) for c in analysis["circular_dependencies"]]
     assert sorted(["demo/app.py", "demo/b.py"]) in cycles
     assert sorted(["web/index.js", "web/util.js"]) in cycles
 
 
-@pytest.mark.xfail(strict=True, reason="BUG-08: internal module edges missing (Stage 2)")
 def test_internal_module_edges_are_reported(analysis):
     edges = {(d["source_module"], d["target_module"]) for d in analysis["module_dependencies"]}
     assert ("web/index.js", "web/util.js") in edges

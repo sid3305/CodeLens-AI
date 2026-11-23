@@ -1,0 +1,4 @@
+{
+  "dependencies": {"@scope/pkg": "^1.0.0", "lodash": "4.17.21"},
+  "devDependencies": {"vitest": "^1.0.0"}
+}

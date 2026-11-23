@@ -1,0 +1,10 @@
+{
+  // Path aliases
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "~utils": ["src/utils/index.ts"], /* exact alias */
+    },
+  },
+}

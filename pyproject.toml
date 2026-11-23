@@ -5,7 +5,7 @@ requires-python = ">=3.10"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
-addopts = "-p no:cacheprovider"
+addopts = "-p no:cacheprovider --ignore=tests/fixtures"
 
 [tool.ruff]
 target-version = "py310"

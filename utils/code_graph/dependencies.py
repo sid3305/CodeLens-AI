@@ -1,417 +1,347 @@
 """
-Dependencies Analyzer Module
+Dependency report built from the file-level import graph.
 
-Extracts and analyzes dependencies within a codebase:
-- Circular import detection
-- Internal vs external dependencies
-- Package/requirements.txt parsing
-- Module dependency graphs
+Combines the import graph (utils/code_graph/import_graph.py) with package
+manifests (requirements*.txt, package.json, pyproject.toml) into the
+response served by the dependencies API. All paths are repository-relative.
 """
 
+from __future__ import annotations
+
 import json
+import posixpath
 import re
-from dataclasses import dataclass, field
+from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from utils.code_graph.graph_builder import CodeGraphBuilder
-from utils.code_graph.models import CodeEdge, CodeNode, EdgeType, NodeType
+from utils.code_graph.import_graph import ImportGraph, normalise_distribution
+
+try:  # Python 3.11+
+    import tomllib
+except ImportError:  # pragma: no cover - Python 3.10
+    tomllib = None
+
+# Extra (non-source) files the dependency analysis needs from the walk.
+MANIFEST_PATTERNS = ("requirements*.txt",)
+
+_REQUIREMENT = re.compile(
+    r"^\s*(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)"  # distribution name
+    r"(?:\[[^\]]*\])?"  # optional extras
+    r"\s*(?P<version>(?:[=<>!~]=?|===)[^;#]*)?"  # optional version specifier
+)
 
 
-@dataclass
-class ExternalDependency:
-    """Represents an external (third-party) dependency."""
-    name: str
-    source_files: list[str] = field(default_factory=list)
-    import_count: int = 0
-    language: str = ""
-    version: str | None = None
-    is_dev_dependency: bool = False
+# --- Manifests ---------------------------------------------------------------
 
 
-@dataclass
-class ModuleDependency:
-    """Represents a dependency between modules/files."""
-    source_module: str
-    target_module: str
-    import_type: str  # 'internal', 'external', 'relative'
-    imports: list[str] = field(default_factory=list)
-    edge_count: int = 1
+def parse_requirements_txt(content: str) -> list[dict[str, str | None]]:
+    """Requirement lines -> [{name, version}]. Options and comments are ignored."""
 
-
-@dataclass
-class CircularDependency:
-    """Represents a circular dependency chain."""
-    cycle: list[str]
-    cycle_type: str  # 'import', 'module'
-    severity: str  # 'critical', 'high', 'medium', 'low'
-    description: str = ""
-
-
-@dataclass
-class DependenciesAnalysisResult:
-    """Complete dependencies analysis result."""
-    repository_id: str
-    total_internal_modules: int
-    total_external_dependencies: int
-    circular_dependencies: list[CircularDependency]
-    module_dependencies: list[ModuleDependency]
-    external_dependencies: list[ExternalDependency]
-    dependency_graph_data: dict[str, Any]  # For frontend visualization
-    language_breakdown: dict[str, dict[str, int]]
-    generated_at: str
-
-
-def parse_requirements_txt(content: str) -> list[dict[str, str]]:
-    """Parse requirements.txt and return list of dependencies with versions."""
     deps = []
-    for line in content.splitlines():
-        line = line.strip()
-        if not line or line.startswith(("#", "-")):
+    for raw in content.splitlines():
+        line = raw.split("#", 1)[0].strip()
+        if not line or line.startswith("-"):
             continue
-        # Handle various formats: package==1.0.0, package>=1.0.0, package
-        match = re.match(r'^([A-Za-z0-9_.-]+)([=<>!~]+.*)?$', line)
+        match = _REQUIREMENT.match(line)
         if match:
-            name = match.group(1)
-            version = match.group(2) if match.group(2) else None
-            deps.append({"name": name, "version": version})
+            version = (match.group("version") or "").strip() or None
+            deps.append({"name": match.group("name"), "version": version})
     return deps
 
 
-def parse_package_json(content: str) -> dict[str, Any]:
-    """Parse package.json and return dependencies."""
+def parse_package_json(content: str) -> dict[str, dict[str, str]]:
     try:
         data = json.loads(content)
-        return {
-            "dependencies": data.get("dependencies", {}),
-            "devDependencies": data.get("devDependencies", {}),
-            "peerDependencies": data.get("peerDependencies", {}),
-            "optionalDependencies": data.get("optionalDependencies", {}),
-        }
     except json.JSONDecodeError:
         return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        key: value
+        for key in ("dependencies", "devDependencies", "peerDependencies", "optionalDependencies")
+        if isinstance(value := data.get(key), dict)
+    }
 
 
-def parse_pyproject_toml(content: str) -> dict[str, Any]:
-    """Parse pyproject.toml for dependencies (basic regex parsing)."""
-    # This is a simplified parser - for full TOML support, use tomli/tomllib
-    deps = {"dependencies": {}, "dev_dependencies": {}}
+def parse_pyproject_toml(content: str) -> dict[str, dict[str, str | None]]:
+    """
+    PEP 621 ([project] dependencies / optional-dependencies) and Poetry.
 
-    # Find [project] dependencies
-    in_deps = False
-    in_optional = False
+    Returns {"dependencies": {...}, "dev_dependencies": {...}}. On Python 3.10
+    (no tomllib) pyproject.toml is not read.
+    """
 
-    for line in content.splitlines():
-        line = line.strip()
-        if line.startswith("[") and line.endswith("]"):
-            in_deps = line == "[project.dependencies]"
-            in_optional = line.startswith("[project.optional-dependencies]")
+    result: dict[str, dict[str, str | None]] = {"dependencies": {}, "dev_dependencies": {}}
+    if tomllib is None:  # pragma: no cover - Python 3.10
+        return result
+
+    try:
+        data = tomllib.loads(content)
+    except tomllib.TOMLDecodeError:
+        return result
+
+    project = data.get("project") or {}
+
+    def add(target: str, requirement: str) -> None:
+        parsed = parse_requirements_txt(requirement)
+        if parsed:
+            result[target][parsed[0]["name"]] = parsed[0]["version"]
+
+    for requirement in project.get("dependencies") or []:
+        if isinstance(requirement, str):
+            add("dependencies", requirement)
+    for group in (project.get("optional-dependencies") or {}).values():
+        for requirement in group if isinstance(group, list) else []:
+            if isinstance(requirement, str):
+                add("dev_dependencies", requirement)
+
+    poetry = (data.get("tool") or {}).get("poetry") or {}
+    for name, spec in (poetry.get("dependencies") or {}).items():
+        if name.lower() != "python":
+            result["dependencies"][name] = spec if isinstance(spec, str) else None
+    for name, spec in (poetry.get("dev-dependencies") or {}).items():
+        result["dev_dependencies"][name] = spec if isinstance(spec, str) else None
+
+    return result
+
+
+def _manifest_entries(root: Path, files: list[str]):
+    """Yield (manifest path, ecosystem, name, version, is_dev) for every declared package."""
+
+    for path in sorted(files):
+        name = posixpath.basename(path).lower()
+        is_requirements = name.startswith("requirements") and name.endswith(".txt")
+        if not (is_requirements or name in ("package.json", "pyproject.toml")):
             continue
 
-        if in_deps and "=" in line and not line.startswith("#"):
-            parts = line.split("=", 1)
-            name = parts[0].strip().strip('"')
-            version = parts[1].strip().strip('"')
-            deps["dependencies"][name] = version
-        elif in_optional and "=" in line and not line.startswith("#"):
-            # Optional deps - treat as dev for now
-            parts = line.split("=", 1)
-            name = parts[0].strip().strip('"')
-            version = parts[1].strip().strip('"')
-            deps["dev_dependencies"][name] = version
+        try:
+            content = (root / path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
 
-    return deps
-
-
-def extract_external_deps_from_imports(
-    nodes: list[CodeNode],
-    edges: list[CodeEdge],
-    repo_path: Path
-) -> list[ExternalDependency]:
-    """Extract external dependencies from import nodes and manifest files."""
-    external_deps: dict[str, ExternalDependency] = {}
-
-    # From import nodes
-    for node in nodes:
-        # Heuristic: external if not relative import
-        if node.node_type == NodeType.IMPORT and not node.name.startswith((".", "@")):
-            base_name = node.name.split("/")[0].split(".")[0]
-            if base_name not in external_deps:
-                external_deps[base_name] = ExternalDependency(
-                    name=base_name,
-                    language=node.language,
-                )
-            dep = external_deps[base_name]
-            dep.import_count += 1
-            if node.file_path not in dep.source_files:
-                dep.source_files.append(node.file_path)
-
-    # From manifest files
-    manifest_files = {
-        "requirements.txt": ("python", False),
-        "requirements-dev.txt": ("python", True),
-        "package.json": ("javascript", False),
-        "pyproject.toml": ("python", False),
-    }
-
-    for manifest_name, (language, is_dev) in manifest_files.items():
-        manifest_path = repo_path / manifest_name
-        if manifest_path.exists():
-            content = manifest_path.read_text(encoding="utf-8", errors="ignore")
-
-            if manifest_name.endswith(".txt"):
-                parsed = parse_requirements_txt(content)
-                for dep in parsed:
-                    name = dep["name"]
-                    if name not in external_deps:
-                        external_deps[name] = ExternalDependency(name=name, language=language)
-                    dep_obj = external_deps[name]
-                    dep_obj.version = dep.get("version")
-                    dep_obj.is_dev_dependency = is_dev
-                    if str(manifest_path) not in dep_obj.source_files:
-                        dep_obj.source_files.append(str(manifest_path))
-
-            elif manifest_name == "package.json":
-                parsed = parse_package_json(content)
-                for dep_type, deps in parsed.items():
-                    is_dev_type = dep_type in ("devDependencies", "peerDependencies")
-                    for name, version in deps.items():
-                        if name not in external_deps:
-                            external_deps[name] = ExternalDependency(name=name, language=language)
-                        dep_obj = external_deps[name]
-                        dep_obj.version = version
-                        dep_obj.is_dev_dependency = is_dev_type
-                        if str(manifest_path) not in dep_obj.source_files:
-                            dep_obj.source_files.append(str(manifest_path))
-
-            elif manifest_name == "pyproject.toml":
-                parsed = parse_pyproject_toml(content)
-                for dep_type, deps in parsed.items():
-                    is_dev_type = dep_type == "dev_dependencies"
-                    for name, version in deps.items():
-                        if name not in external_deps:
-                            external_deps[name] = ExternalDependency(name=name, language=language)
-                        dep_obj = external_deps[name]
-                        dep_obj.version = version
-                        dep_obj.is_dev_dependency = is_dev_type
-                        if str(manifest_path) not in dep_obj.source_files:
-                            dep_obj.source_files.append(str(manifest_path))
-
-    return list(external_deps.values())
+        if is_requirements:
+            is_dev = "dev" in name or "test" in name
+            for dep in parse_requirements_txt(content):
+                yield path, "python", dep["name"], dep["version"], is_dev
+        elif name == "package.json":
+            for section, deps in parse_package_json(content).items():
+                is_dev = section in ("devDependencies", "peerDependencies")
+                for package, version in deps.items():
+                    yield path, "javascript", package, str(version), is_dev
+        else:
+            for section, deps in parse_pyproject_toml(content).items():
+                for package, version in deps.items():
+                    yield path, "python", package, version, section == "dev_dependencies"
 
 
-def build_module_dependency_graph(
-    nodes: list[CodeNode],
-    edges: list[CodeEdge],
-    repo_path: Path
-) -> tuple[list[ModuleDependency], dict[str, set[str]]]:
-    """Build module-level dependency graph from file-level imports."""
-    builder = CodeGraphBuilder()
-    builder.build(nodes, edges)
+def external_dependencies(graph: ImportGraph, root: Path, files: list[str]) -> list[dict[str, Any]]:
+    """
+    One entry per package, merging imports with manifest declarations.
 
-    # Get file-level dependencies
-    file_deps = builder.get_module_dependencies()
+    Python names are PEP 503-normalised distribution names so that
+    `import yaml` and `PyYAML` in requirements.txt are the same package.
+    """
 
-    module_deps = []
-    for src_file, tgt_files in file_deps.items():
-        src_module = src_file.replace("file:", "")
-        for tgt_file in tgt_files:
-            tgt_module = tgt_file.replace("file:", "")
+    merged: dict[str, dict[str, Any]] = {}
 
-            # Find import edges between these files
-            imports_between = []
-            for edge in edges:
-                if edge.edge_type == EdgeType.IMPORTS:
-                    src_node = next((n for n in nodes if n.id == edge.source), None)
-                    tgt_node = next((n for n in nodes if n.id == edge.target), None)
-                    if src_node and tgt_node:
-                        src_file_check = src_node.file_path
-                        tgt_file_check = tgt_node.file_path
-                        if src_file_check == src_module and tgt_file_check == tgt_module:
-                            imports_between.append(src_node.name)
+    def entry(name: str, language: str) -> dict[str, Any]:
+        return merged.setdefault(
+            name,
+            {
+                "name": name,
+                "source_files": [],
+                "import_count": 0,
+                "language": language,
+                "version": None,
+                "is_dev_dependency": False,
+                "declared": False,
+            },
+        )
 
-            module_deps.append(ModuleDependency(
-                source_module=src_module,
-                target_module=tgt_module,
-                import_type="internal",
-                imports=imports_between,
-                edge_count=len(imports_between) if imports_between else 1
-            ))
+    for package in graph.external_packages().values():
+        item = entry(package.name, package.language)
+        item["import_count"] += package.import_count
+        item["source_files"].extend(package.files)
 
-    # Also check for cross-file imports via external dependency resolution
-    # (already handled in parser_factory._extract_cross_file_edges)
+    declared_prod: set[str] = set()
+    for manifest, ecosystem, name, version, is_dev in _manifest_entries(root, files):
+        key = normalise_distribution(name) if ecosystem == "python" else name
+        item = entry(key, ecosystem)
+        if not is_dev:
+            declared_prod.add(key)
+        item["declared"] = True
+        item["version"] = item["version"] or version
+        item["is_dev_dependency"] = key not in declared_prod
+        if manifest not in item["source_files"]:
+            item["source_files"].append(manifest)
 
-    return module_deps, file_deps
-
-
-def find_circular_dependencies(
-    nodes: list[CodeNode],
-    edges: list[CodeEdge]
-) -> list[CircularDependency]:
-    """Find circular import dependencies at module level."""
-    builder = CodeGraphBuilder()
-    builder.build(nodes, edges)
-
-    # Get file-level import cycles
-    cycles = builder.find_circular_imports()
-
-    circular_deps = []
-    for cycle in cycles:
-        # Convert to file paths for readability
-        file_cycle = []
-        for node_id in cycle:
-            node = next((n for n in nodes if n.id == node_id), None)
-            if node and node.node_type == NodeType.FILE or node:
-                file_cycle.append(node.file_path)
-
-        # Deduplicate consecutive files
-        deduped = []
-        for f in file_cycle:
-            if not deduped or deduped[-1] != f:
-                deduped.append(f)
-
-        if len(deduped) >= 2:
-            severity = "high" if len(deduped) <= 3 else "medium"
-            if len(deduped) > 5:
-                severity = "low"
-
-            circular_deps.append(CircularDependency(
-                cycle=deduped,
-                cycle_type="import",
-                severity=severity,
-                description=f"Circular import chain: {' -> '.join(deduped)}"
-            ))
-
-    return circular_deps
+    return sorted(merged.values(), key=lambda item: (-item["import_count"], item["name"]))
 
 
-def analyze_dependencies(
-    repo_id: str,
-    repo_path: Path,
-    nodes: list[CodeNode],
-    edges: list[CodeEdge]
-) -> DependenciesAnalysisResult:
-    """Main entry point for dependencies analysis."""
-    from datetime import datetime, timezone
-
-    # Find circular dependencies
-    circular_deps = find_circular_dependencies(nodes, edges)
-
-    # Build module dependency graph
-    module_deps, file_deps = build_module_dependency_graph(nodes, edges, repo_path)
-
-    # Extract external dependencies
-    external_deps = extract_external_deps_from_imports(nodes, edges, repo_path)
-
-    # Language breakdown
-    language_breakdown = {}
-    file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
-    for fnode in file_nodes:
-        lang = fnode.language
-        if lang not in language_breakdown:
-            language_breakdown[lang] = {"files": 0, "internal_deps": 0, "external_deps": 0}
-        language_breakdown[lang]["files"] += 1
-
-    # Count internal deps per language
-    for dep in module_deps:
-        src_lang = "unknown"
-        for fnode in file_nodes:
-            if fnode.file_path == dep.source_module:
-                src_lang = fnode.language
-                break
-        if src_lang in language_breakdown:
-            language_breakdown[src_lang]["internal_deps"] += 1
-
-    # Count external deps per language
-    for dep in external_deps:
-        if dep.language in language_breakdown:
-            language_breakdown[dep.language]["external_deps"] += 1
-
-    # Build graph data for frontend (React Flow format)
-    builder = CodeGraphBuilder()
-    builder.build(nodes, edges)
-    graph_data = builder.export_for_frontend(max_nodes=200)
-
-    # Add module-level graph for dependency view
-    module_graph = _build_module_graph_for_frontend(nodes, file_deps, module_deps)
-    graph_data["moduleGraph"] = module_graph
-
-    return DependenciesAnalysisResult(
-        repository_id=repo_id,
-        total_internal_modules=len(file_nodes),
-        total_external_dependencies=len(external_deps),
-        circular_dependencies=circular_deps,
-        module_dependencies=module_deps,
-        external_dependencies=external_deps,
-        dependency_graph_data=graph_data,
-        language_breakdown=language_breakdown,
-        generated_at=datetime.now(timezone.utc).isoformat(),
-    )
+# --- Report ------------------------------------------------------------------
 
 
-def _build_module_graph_for_frontend(
-    nodes: list[CodeNode],
-    file_deps: dict[str, set[str]],
-    module_deps: list[ModuleDependency]
-) -> dict[str, Any]:
-    """Build a module-level graph for React Flow visualization."""
-    file_nodes = [n for n in nodes if n.node_type == NodeType.FILE]
+def _cycle_severity(length: int) -> str:
+    if length <= 3:
+        return "high"
+    if length <= 5:
+        return "medium"
+    return "low"
 
-    rf_nodes = []
-    for fnode in file_nodes:
-        rf_nodes.append({
-            "id": fnode.id,
+
+def circular_dependencies(graph: ImportGraph) -> list[dict[str, Any]]:
+    cycles = []
+    for order, members in graph.cyclic_groups():
+        path = " -> ".join([*order, order[0]])
+        cycles.append({
+            "cycle": order,
+            "files": members,
+            "cycle_type": "import",
+            "severity": _cycle_severity(len(members)),
+            "description": f"Circular import chain: {path}",
+        })
+    return cycles
+
+
+def module_dependencies(graph: ImportGraph) -> list[dict[str, Any]]:
+    modules = []
+    for (source, target), items in sorted(graph.internal_edges().items()):
+        names: list[str] = []
+        for item in items:
+            for name in item.names or [item.specifier]:
+                if name not in names:
+                    names.append(name)
+        modules.append({
+            "source_module": source,
+            "target_module": target,
+            "import_type": "internal",
+            "imports": names,
+            "edge_count": len(items),
+        })
+    return modules
+
+
+def module_graph(graph: ImportGraph, modules: list[dict[str, Any]]) -> dict[str, Any]:
+    """File-level graph in React Flow format."""
+
+    nodes = [
+        {
+            "id": f"file:{path}",
             "type": "moduleNode",
             "data": {
-                "label": fnode.name,
-                "fullLabel": fnode.qualified_name,
-                "filePath": fnode.file_path,
-                "language": fnode.language,
-                "nodeCount": sum(1 for n in nodes if n.file_path == fnode.file_path),
+                "label": posixpath.basename(path),
+                "fullLabel": path,
+                "filePath": path,
+                "language": graph.languages[path],
             },
             "position": {"x": 0, "y": 0},
-        })
-
-    rf_edges = []
-    for dep in module_deps:
-        src_id = f"file:{dep.source_module}"
-        tgt_id = f"file:{dep.target_module}"
-        rf_edges.append({
-            "id": f"{src_id}-{tgt_id}",
-            "source": src_id,
-            "target": tgt_id,
+        }
+        for path in graph.files
+    ]
+    edges = [
+        {
+            "id": f"file:{dep['source_module']}->file:{dep['target_module']}",
+            "source": f"file:{dep['source_module']}",
+            "target": f"file:{dep['target_module']}",
             "type": "moduleEdge",
-            "data": {
-                "imports": dep.imports,
-                "edgeCount": dep.edge_count,
-            },
-            "animated": True,
-            "style": {"stroke": "#8b5cf6", "strokeWidth": 1 + min(dep.edge_count / 5, 3)},
-        })
+            "data": {"imports": dep["imports"], "edgeCount": dep["edge_count"]},
+        }
+        for dep in modules
+    ]
+    return {"nodes": nodes, "edges": edges}
 
+
+def language_breakdown(graph: ImportGraph) -> dict[str, dict[str, int]]:
+    breakdown: dict[str, dict[str, int]] = defaultdict(
+        lambda: {"files": 0, "internal_deps": 0, "external_deps": 0}
+    )
+    for language in graph.languages.values():
+        breakdown[language]["files"] += 1
+
+    for source, _target in graph.internal_edges():
+        breakdown[graph.languages[source]]["internal_deps"] += 1
+
+    packages_by_language: dict[str, set[str]] = defaultdict(set)
+    for item in graph.imports:
+        if item.category == "external" and item.package:
+            packages_by_language[item.language].add(item.package)
+    for language, packages in packages_by_language.items():
+        breakdown[language]["external_deps"] = len(packages)
+
+    return dict(sorted(breakdown.items()))
+
+
+def import_statistics(graph: ImportGraph) -> dict[str, int]:
+    statements = {(item.source, item.line, item.specifier) for item in graph.imports}
+    by_category: dict[str, set] = defaultdict(set)
+    for item in graph.imports:
+        by_category[item.category].add((item.source, item.line, item.specifier))
     return {
-        "nodes": rf_nodes,
-        "edges": rf_edges,
+        "total_imports": len(statements),
+        "internal_imports": len(by_category["internal"]),
+        "stdlib_imports": len(by_category["stdlib"]),
+        "external_imports": len(by_category["external"]),
+        "unresolved_imports": len(by_category["unresolved"]),
     }
 
 
-def get_dependency_stats(nodes: list[CodeNode], edges: list[CodeEdge]) -> dict[str, Any]:
-    """Get quick dependency statistics."""
-    builder = CodeGraphBuilder()
-    builder.build(nodes, edges)
+def build_dependency_report(
+    repo_id: str,
+    root: Path,
+    files: list[str],
+    graph: ImportGraph,
+    *,
+    code_graph: dict[str, Any] | None = None,
+    code_stats: dict[str, int] | None = None,
+) -> dict[str, Any]:
+    """
+    Assemble the full dependency report.
 
-    circular = builder.find_circular_imports()
-    dead_code = builder.find_dead_code()
-    hotspots = builder.find_hotspots()
+    ``code_graph``/``code_stats`` come from the function-level code graph
+    (calls, dead code, hotspots) and are optional.
+    """
 
-    import_edges = [e for e in edges if e.edge_type == EdgeType.IMPORTS]
-    call_edges = [e for e in edges if e.edge_type == EdgeType.CALLS]
+    modules = module_dependencies(graph)
+    cycles = circular_dependencies(graph)
+    externals = external_dependencies(graph, root, files)
+
+    graph_data = dict(code_graph or {"nodes": [], "edges": [], "totalNodes": 0, "totalEdges": 0,
+                                     "showingNodes": 0, "showingEdges": 0})
+    graph_data.setdefault("folders", sorted({posixpath.dirname(p) or "." for p in graph.files}))
+    graph_data["moduleGraph"] = module_graph(graph, modules)
+
+    stats = {
+        **import_statistics(graph),
+        "total_calls": 0,
+        "dead_code_count": 0,
+        "hotspot_count": 0,
+        **(code_stats or {}),
+        "circular_import_count": len(cycles),
+        "file_count": len(graph.files),
+    }
 
     return {
-        "total_imports": len(import_edges),
-        "total_calls": len(call_edges),
-        "circular_import_count": len(circular),
-        "dead_code_count": len(dead_code),
-        "hotspot_count": len(hotspots),
-        "file_count": len([n for n in nodes if n.node_type == NodeType.FILE]),
+        "repository_id": repo_id,
+        "total_internal_modules": len(graph.files),
+        "total_external_dependencies": len(externals),
+        "circular_dependencies": cycles,
+        "module_dependencies": modules,
+        "external_dependencies": externals,
+        "unresolved_imports": [
+            {
+                "file": item.source,
+                "line": item.line,
+                "specifier": item.specifier,
+                "language": item.language,
+                "reason": item.reason or "unresolved",
+            }
+            for item in graph.unresolved()
+        ],
+        "skipped_files": [{"path": s.path, "reason": s.reason} for s in graph.skipped],
+        "dependency_graph_data": graph_data,
+        "language_breakdown": language_breakdown(graph),
+        "stats": stats,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
     }

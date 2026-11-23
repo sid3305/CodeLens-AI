@@ -1,4 +1,5 @@
 
+import fnmatch
 import os
 import re
 import shutil
@@ -22,7 +23,8 @@ MAX_REPOSITORY_FILES = 50_000              # files in a cloned repository
 SUPPORTED_EXTENSIONS = {
     ".py", ".java", ".cpp", ".c", ".cs",
     ".go", ".rb", ".php",
-    ".js", ".jsx", ".ts", ".tsx",
+    ".js", ".jsx", ".mjs", ".cjs",
+    ".ts", ".tsx", ".mts", ".cts",
     ".html", ".css",
     ".json", ".yaml", ".yml", ".toml",
     ".md",
@@ -300,9 +302,12 @@ def _clone(clone_url, repo_folder):
 
 # ---------------- REPOSITORY FILE DISCOVERY ----------------
 
-def get_code_files(folder_path):
+def get_code_files(folder_path, include_patterns=()):
     """
     Recursively collect supported text/code files.
+
+    ``include_patterns`` are extra file-name globs (e.g. "requirements*.txt")
+    accepted even though their extension is not a source extension.
 
     Skips:
     - Unnecessary directories
@@ -331,7 +336,9 @@ def get_code_files(folder_path):
             if filename.lower().startswith(".env"):
                 continue
 
-            if file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            if file_path.suffix.lower() not in SUPPORTED_EXTENSIONS and not any(
+                fnmatch.fnmatch(filename.lower(), pattern) for pattern in include_patterns
+            ):
                 continue
 
             try:

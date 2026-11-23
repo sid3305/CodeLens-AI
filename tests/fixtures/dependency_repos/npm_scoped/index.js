@@ -1,0 +1,10 @@
+import a from '@scope/pkg'
+import b from '@scope/pkg/sub/path'
+import fp from 'lodash/fp'
+import _ from 'lodash'
+import fs from 'node:fs'
+import path from 'path'
+import { readFile } from 'fs/promises'
+import x from './missing'
+import y from 'https://cdn.example.com/lib.js'
+const z = require('express')
