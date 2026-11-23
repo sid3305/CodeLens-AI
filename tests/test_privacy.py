@@ -302,6 +302,8 @@ class _ProviderFailure(Exception):
         (_ProviderFailure("Error code: 429 - {'error': 'slow down'}", 429), "Groq is rate limiting requests. Try again in a minute."),
         (ConnectionError("connection to api.groq.com failed"), "Could not reach Groq. Check your connection and try again."),
         (_ProviderFailure("Error code: 500 - {'error': 'internal'}", 500), "Groq returned an error. Try again later."),
+        (_ProviderFailure("Error code: 413 - {'error': 'Request too large'}", 413),
+         "The request is larger than your Groq plan allows per minute. Try a smaller file or selection, or a higher Groq tier."),
         (ValueError(r"weird failure at C:\Users\someone\secret\path"), "Groq returned an error. Try again later."),
     ],
 )

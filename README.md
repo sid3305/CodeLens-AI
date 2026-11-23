@@ -27,7 +27,7 @@ code or findings. It runs on your machine and is meant for `localhost` use.
   - Explain this file: the file, up to 12,000 characters.
   - Explain selection: only the selected lines, at most 400.
   - Explain finding / Suggest fix: the finding plus at most 21 lines around it.
-  - Summary: up to 30,000 characters of source.
+  - Summary: up to 16,000 characters of source.
 - **Never sent, listed or previewed:**
   - `.env*`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.htpasswd`, `.pgpass`
   - `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`

@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from agents.explain_agent import run_explain_agent
 from agents.finding_agent import code_window, run_finding_agent
-from agents.repo_agent import run_repo_agent
+from agents.repo_agent import MAX_REPOSITORY_CHARS, run_repo_agent
 from backend.schemas.ai import (
     MAX_SELECTION_LINES,
     AiConsentRequest,
@@ -220,7 +220,7 @@ def generate_repository_summary(
         summary_data = {
             "summary": summary_text,
             "generated_at": datetime.now(timezone.utc).isoformat(),
-            "truncated": len(repository_content) > 30000,
+            "truncated": len(repository_content) > MAX_REPOSITORY_CHARS,
         }
 
         save_repository_summary(repo_id, summary_data)

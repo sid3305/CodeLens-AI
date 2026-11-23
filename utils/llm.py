@@ -90,6 +90,10 @@ class GroqProvider:
         kind = type(error).__name__.lower()
         if status == 401 or status == 403 or "authentication" in kind or "permission" in kind:
             return AIServiceError("Groq rejected the API key. Check GROQ_API_KEY in .env.")
+        if status == 413:
+            return AIServiceError(
+                "The request is larger than your Groq plan allows per minute. Try a smaller file or selection, or a higher Groq tier."
+            )
         if status == 429 or "ratelimit" in kind:
             return AIServiceError("Groq is rate limiting requests. Try again in a minute.")
         if isinstance(error, (ConnectionError, TimeoutError, OSError)) or "connection" in kind or "timeout" in kind:

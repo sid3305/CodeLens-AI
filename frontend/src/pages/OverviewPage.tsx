@@ -64,7 +64,7 @@ export default function OverviewPage({ repository }: { repository: Repository })
         aiNotice={
           <AiConsentNotice
             repoId={repository.id}
-            sends="up to 30,000 characters of this repository's source code"
+            sends="up to 16,000 characters of this repository's source code"
           />
         }
       />

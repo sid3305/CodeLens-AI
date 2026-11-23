@@ -3,7 +3,8 @@ from prompts.prompts import REPOSITORY_SUMMARY_PROMPT
 from utils.llm import call_llm
 from utils.security import redact_secrets
 
-MAX_REPOSITORY_CHARS = 30000
+# About 4-5k tokens: with the answer, it fits the free Groq tier (8k tokens/minute).
+MAX_REPOSITORY_CHARS = 16000
 
 
 def run_repo_agent(repository_content):
@@ -22,7 +23,7 @@ def run_repo_agent(repository_content):
         content=sanitized_content
     )
 
-    response = call_llm(prompt, max_tokens=2048)
+    response = call_llm(prompt, max_tokens=1500)
 
     if truncated:
         response += (
