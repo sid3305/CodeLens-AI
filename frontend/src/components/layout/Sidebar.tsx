@@ -40,6 +40,8 @@ interface SidebarProps {
   loading: boolean
   /** Number of findings from the latest analysis, or null if none ran yet. */
   issueCount: number | null
+  /** Called after any navigation, so an off-canvas drawer can close. */
+  onNavigated?: () => void
 }
 
 const navigation = [
@@ -64,6 +66,7 @@ export default function Sidebar({
   loading,
   issueCount,
   explorerFocusPath = null,
+  onNavigated,
 }: SidebarProps) {
   const [explorerOpen, setExplorerOpen] = useState(true)
   const [workspaceOpen, setWorkspaceOpen] = useState(true)
@@ -79,15 +82,28 @@ export default function Sidebar({
 
   const closeAfter = (task: Promise<boolean | void>) =>
     task.then((ok) => {
-      if (ok !== false) setImportOpen(false)
+      if (ok !== false) {
+        setImportOpen(false)
+        onNavigated?.()
+      }
       return ok
     })
 
+  const navigateTo = (section: WorkspaceSection) => {
+    onNavigate(section)
+    onNavigated?.()
+  }
+  const selectRepository = (id: string) => {
+    onSelectRepository(id)
+    onNavigated?.()
+  }
+  const selectFile = (path: string) => {
+    onSelectFile(path)
+    onNavigated?.()
+  }
+
   return (
-    <aside
-      aria-label="Workspace navigation"
-      className="sticky top-0 flex h-screen w-72 shrink-0 flex-col border-r border-border bg-surface"
-    >
+    <aside aria-label="Workspace navigation" className="flex h-full min-h-0 flex-col bg-surface">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
         <span
           className="flex size-8 items-center justify-center rounded-sm bg-accent text-on-accent"
@@ -108,7 +124,7 @@ export default function Sidebar({
                 <li key={id}>
                   <button
                     type="button"
-                    onClick={() => onNavigate(id)}
+                    onClick={() => navigateTo(id)}
                     aria-current={activeSection === id ? 'page' : undefined}
                     className={cn(
                       'flex h-9 w-full items-center gap-2.5 rounded-sm px-2.5 text-base text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -173,7 +189,7 @@ export default function Sidebar({
                     <button
                       type="button"
                       aria-current={selected ? 'true' : undefined}
-                      onClick={() => onSelectRepository(repository.id)}
+                      onClick={() => selectRepository(repository.id)}
                       className="flex min-w-0 flex-1 items-center gap-2 px-2 py-1.5 text-left"
                     >
                       <FolderGit2 size={16} aria-hidden="true" className="shrink-0 text-fg-muted" />
@@ -230,7 +246,7 @@ export default function Sidebar({
               files={files}
               repositoryName={selectedRepository.name}
               selectedFilePath={selectedFilePath}
-              onSelectFile={onSelectFile}
+              onSelectFile={selectFile}
             />
           </SidebarSection>
         )}

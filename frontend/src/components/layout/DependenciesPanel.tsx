@@ -338,7 +338,7 @@ export default function DependenciesPanel({ repository }: { repository: Reposito
 
         {analysis && (
           <>
-            <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
               <StatTile icon={<Files size={18} />} label="Source files" value={analysis.total_internal_modules} />
               <StatTile icon={<Package size={18} />} label="External packages" value={analysis.total_external_dependencies} />
               <StatTile icon={<GitMerge size={18} />} label="Import cycles" value={analysis.stats.circular_import_count} />

@@ -1,11 +1,12 @@
 
 import { useCallback, useEffect, useState } from 'react'
-import { PanelLeftClose, PanelLeftOpen } from 'lucide-react'
+import { Menu, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 
 import Sidebar from './Sidebar'
 import ThemeToggle from './ThemeToggle'
 import WorkspacePanel from './WorkspacePanel'
-import { Button, Dialog, IconButton, useToast } from '../ui'
+import { Button, Dialog, Drawer, IconButton, useToast } from '../ui'
+import { DESKTOP_QUERY, useMediaQuery } from '../../hooks/useMediaQuery'
 
 import { api, errorMessage } from '../../services/api'
 import { describeAnalysis } from '../../lib/analysis'
@@ -39,7 +40,9 @@ export default function AppShell() {
   const [activeSection, setActiveSection] =
     useState<WorkspaceSection>('overview')
 
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const isDesktop = useMediaQuery(DESKTOP_QUERY)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [drawerOpen, setDrawerOpen] = useState(false)
 
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [selectedRepositoryId, setSelectedRepositoryId] =
@@ -309,47 +312,86 @@ export default function AppShell() {
     'file-preview': 'File preview',
   }[activeSection]
 
+  const sidebar = (
+    <Sidebar
+      activeSection={activeSection}
+      onNavigate={(section) => {
+        setFileSelection(null)
+        setActiveSection(section)
+      }}
+      repositories={repositories}
+      selectedRepositoryId={selectedRepositoryId}
+      onSelectRepository={selectRepository}
+      files={files}
+      selectedFilePath={selectedFilePath}
+      onSelectFile={handleSelectFile}
+      onImportZip={handleImportZip}
+      onImportGitHub={handleImportGitHub}
+      onDeleteRepository={(repository) => setDeleteTarget(repository)}
+      importing={importing}
+      loading={loading}
+      issueCount={analysis ? analysis.findings.length : null}
+      explorerFocusPath={
+        explorerFocus && explorerFocus.repoId === selectedRepositoryId
+          ? explorerFocus.path
+          : null
+      }
+      onNavigated={isDesktop ? undefined : () => setDrawerOpen(false)}
+    />
+  )
+
   return (
     <div className="flex min-h-screen bg-bg text-fg">
-      {!sidebarCollapsed && (
-        <Sidebar
-          activeSection={activeSection}
-          onNavigate={(section) => {
-            setFileSelection(null)
-            setActiveSection(section)
-          }}
-          repositories={repositories}
-          selectedRepositoryId={selectedRepositoryId}
-          onSelectRepository={selectRepository}
-          files={files}
-          selectedFilePath={selectedFilePath}
-          onSelectFile={handleSelectFile}
-          onImportZip={handleImportZip}
-          onImportGitHub={handleImportGitHub}
-          onDeleteRepository={(repository) => setDeleteTarget(repository)}
-          importing={importing}
-          loading={loading}
-          issueCount={analysis ? analysis.findings.length : null}
-          explorerFocusPath={
-            explorerFocus && explorerFocus.repoId === selectedRepositoryId
-              ? explorerFocus.path
-              : null
-          }
-        />
+      {isDesktop && sidebarOpen && (
+        <div className="sticky top-0 h-screen w-72 shrink-0 border-r border-border">{sidebar}</div>
+      )}
+
+      {!isDesktop && (
+        <Drawer open={drawerOpen} onOpenChange={setDrawerOpen} title="Navigation">
+          {sidebar}
+        </Drawer>
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-[var(--cl-z-header)] flex h-14 items-center gap-2 border-b border-border bg-surface px-3">
-          <IconButton
-            aria-label={sidebarCollapsed ? 'Show navigation' : 'Hide navigation'}
-            aria-expanded={!sidebarCollapsed}
-            icon={sidebarCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-          />
+        <header className="sticky top-0 z-[var(--cl-z-header)] flex h-14 items-center gap-2 border-b border-border bg-surface px-2 sm:px-3">
+          {isDesktop ? (
+            <IconButton
+              aria-label={sidebarOpen ? 'Hide navigation' : 'Show navigation'}
+              aria-expanded={sidebarOpen}
+              icon={sidebarOpen ? <PanelLeftClose size={17} /> : <PanelLeftOpen size={17} />}
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+            />
+          ) : (
+            <IconButton
+              aria-label="Open navigation"
+              aria-expanded={drawerOpen}
+              aria-haspopup="dialog"
+              icon={<Menu size={18} />}
+              onClick={() => setDrawerOpen(true)}
+            />
+          )}
 
           <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
             <ol className="flex min-w-0 items-center gap-1.5 text-sm">
-              <li className="truncate text-fg-muted">{selectedRepository?.name ?? 'No repository'}</li>
+              <li className="min-w-0">
+                {repositories.length > 0 ? (
+                  <>
+                    <label htmlFor="repository-switcher" className="sr-only">Repository</label>
+                    <select
+                      id="repository-switcher"
+                      value={selectedRepositoryId ?? ''}
+                      onChange={(event) => selectRepository(event.target.value)}
+                      className="h-8 max-w-[38vw] truncate rounded-sm border border-transparent bg-transparent pl-1.5 pr-6 text-sm font-medium text-fg hover:border-border-strong sm:max-w-xs"
+                    >
+                      {repositories.map((repository) => (
+                        <option key={repository.id} value={repository.id}>{repository.name}</option>
+                      ))}
+                    </select>
+                  </>
+                ) : (
+                  <span className="text-fg-muted">No repository</span>
+                )}
+              </li>
               {selectedRepository && (
                 <>
                   <li aria-hidden="true" className="text-fg-subtle">/</li>
@@ -359,7 +401,7 @@ export default function AppShell() {
             </ol>
           </nav>
 
-          <p className="hidden items-center gap-1.5 text-sm text-fg-muted sm:inline-flex" role="status">
+          <p className="inline-flex items-center gap-1.5 text-sm text-fg-muted" role="status">
             <span
               aria-hidden="true"
               className={
@@ -370,33 +412,38 @@ export default function AppShell() {
                     : 'size-2 rounded-full bg-fg-subtle'
               }
             />
-            {apiStatus === 'checking'
-              ? 'Checking API…'
-              : apiStatus === 'online'
-                ? 'API connected'
-                : 'API unreachable'}
+            <span className={apiStatus === 'offline' ? undefined : 'sr-only sm:not-sr-only'}>
+              {apiStatus === 'checking'
+                ? 'Checking API…'
+                : apiStatus === 'online'
+                  ? 'API connected'
+                  : 'API unreachable'}
+            </span>
           </p>
 
           <ThemeToggle />
         </header>
 
-        <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
-          <WorkspacePanel
-            activeSection={activeSection}
-            repository={selectedRepository}
-            files={files}
-            analysis={analysis}
-            selectedFilePath={selectedFilePath}
-            selectedFileContent={selectedFileContent}
-            onRunAnalysis={handleRunAnalysis}
-            analyzing={analyzing}
-            onImportZip={handleImportZip}
-            onImportGitHub={handleImportGitHub}
-            importing={importing}
-            selectedLine={selectedLine}
-            onOpenFinding={handleSelectFile}
-          />
-        </main>
+        {/* Room for a future right-hand assistant drawer; nothing is rendered there yet. */}
+        <div className="flex min-w-0 flex-1">
+          <main id="main-content" tabIndex={-1} className="min-w-0 flex-1 focus:outline-none">
+            <WorkspacePanel
+              activeSection={activeSection}
+              repository={selectedRepository}
+              files={files}
+              analysis={analysis}
+              selectedFilePath={selectedFilePath}
+              selectedFileContent={selectedFileContent}
+              onRunAnalysis={handleRunAnalysis}
+              analyzing={analyzing}
+              onImportZip={handleImportZip}
+              onImportGitHub={handleImportGitHub}
+              importing={importing}
+              selectedLine={selectedLine}
+              onOpenFinding={handleSelectFile}
+            />
+          </main>
+        </div>
       </div>
 
       <Dialog

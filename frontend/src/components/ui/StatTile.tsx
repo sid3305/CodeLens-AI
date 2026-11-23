@@ -20,13 +20,13 @@ export function StatTile({
   return (
     <div
       className={cn(
-        'flex min-w-0 items-center gap-3 rounded-md border border-border bg-surface p-4 shadow-sm',
+        'flex min-w-0 items-center gap-3 rounded-md border border-border bg-surface p-3 shadow-sm sm:p-4',
         className,
       )}
     >
       {icon && (
         <div
-          className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-accent-soft text-accent-text"
+          className="hidden size-9 shrink-0 items-center justify-center rounded-sm bg-accent-soft text-accent-text min-[420px]:flex"
           aria-hidden="true"
         >
           {icon}

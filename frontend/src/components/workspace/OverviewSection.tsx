@@ -45,7 +45,7 @@ export default function OverviewSection({
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-1 gap-3 min-[480px]:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
         <StatTile icon={<Files size={18} />} label="Source files" value={files.length} />
         <StatTile icon={<Code2 size={18} />} label="File types" value={countFileTypes(files)} />
         <StatTile
