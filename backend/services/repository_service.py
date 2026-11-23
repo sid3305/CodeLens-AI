@@ -15,6 +15,7 @@ from utils.file_handler import (
     extract_zip,
     clone_github_repo,
     get_code_files,
+    remove_tree,
 )
 from utils.security import is_sensitive_file
 from utils.parser import read_file_content
@@ -55,6 +56,11 @@ def _register_repository(repo_id, name, source, repo_path):
     """Save repository metadata and return its record."""
 
     code_files = get_code_files(repo_path)
+
+    if not code_files:
+        raise ValueError(
+            "No supported source files were found in this repository."
+        )
 
     repository = {
         "id": repo_id,
@@ -171,7 +177,7 @@ async def import_zip_repository(upload: UploadFile):
         )
 
     except Exception:
-        shutil.rmtree(workspace, ignore_errors=True)
+        remove_tree(workspace)
         raise
 
     finally:
@@ -200,7 +206,7 @@ def import_github_repository(repo_url):
         )
 
     except Exception:
-        shutil.rmtree(workspace, ignore_errors=True)
+        remove_tree(workspace)
         raise
 
 def list_repository_files(repo_id):

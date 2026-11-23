@@ -1,9 +1,11 @@
 
 import os
 import re
+import shutil
 import uuid
 import zipfile
 import subprocess
+import sys
 
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
@@ -16,6 +18,8 @@ UPLOAD_DIR = Path("uploads")
 MAX_ARCHIVE_SIZE = 100 * 1024 * 1024       # 100 MB
 MAX_EXTRACTED_SIZE = 500 * 1024 * 1024     # 500 MB
 MAX_SINGLE_FILE_SIZE = 1 * 1024 * 1024     # 1 MB for AI scanning
+MAX_ARCHIVE_ENTRIES = 10_000               # files + directories in a ZIP
+MAX_REPOSITORY_FILES = 50_000              # files in a cloned repository
 
 SUPPORTED_EXTENSIONS = {
     ".py", ".java", ".cpp", ".c", ".cs",
@@ -84,6 +88,51 @@ def save_uploaded_file(uploaded_file):
     return str(file_path)
 
 
+# ---------------- PORTABLE NAMES ----------------
+
+_WINDOWS_RESERVED_NAMES = {
+    "con", "prn", "aux", "nul",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+
+_WINDOWS_INVALID_CHARACTERS = set('<>:"|?*') | {chr(code) for code in range(32)}
+
+
+def is_portable_name(name):
+    """
+    Return True when a single path component can be created on every
+    supported platform (Windows is the most restrictive).
+
+    Non-portable entries are skipped on all platforms so an archive
+    produces the same file list wherever CodeLens AI runs.
+    """
+
+    if not name or name in {".", ".."}:
+        return False
+
+    if any(character in _WINDOWS_INVALID_CHARACTERS for character in name):
+        return False
+
+    if name[-1] in {" ", "."}:
+        return False
+
+    return name.split(".")[0].lower() not in _WINDOWS_RESERVED_NAMES
+
+
+def remove_tree(path):
+    """Delete a directory tree, clearing read-only flags (Windows .git files)."""
+
+    def _make_writable_and_retry(function, target, _error):
+        os.chmod(target, 0o700)
+        function(target)
+
+    if sys.version_info >= (3, 12):
+        shutil.rmtree(path, onexc=_make_writable_and_retry)
+    else:  # pragma: no cover - Python 3.10/3.11
+        shutil.rmtree(path, onerror=_make_writable_and_retry)
+
+
 # ---------------- SECURE ZIP EXTRACTION ----------------
 
 def extract_zip(zip_path):
@@ -110,9 +159,22 @@ def extract_zip(zip_path):
 
     total_size = 0
 
-    with zipfile.ZipFile(zip_path, "r") as zip_ref:
+    try:
+        zip_ref = zipfile.ZipFile(zip_path, "r")
+    except zipfile.BadZipFile:
+        raise ValueError("The uploaded file is not a valid ZIP archive.")
 
-        for info in zip_ref.infolist():
+    with zip_ref:
+
+        entries = zip_ref.infolist()
+
+        if len(entries) > MAX_ARCHIVE_ENTRIES:
+            raise ValueError(
+                f"ZIP contains too many entries ({len(entries):,}). "
+                f"The limit is {MAX_ARCHIVE_ENTRIES:,}."
+            )
+
+        for info in entries:
 
             # Reject symbolic links.
             unix_mode = info.external_attr >> 16
@@ -120,11 +182,20 @@ def extract_zip(zip_path):
             if (unix_mode & 0o170000) == 0o120000:
                 raise ValueError("ZIP contains an unsafe symbolic link.")
 
-            # ZIP paths use forward slashes.
-            member_path = PurePosixPath(info.filename)
+            # ZIP paths should use forward slashes, but some Windows tools
+            # write backslashes. Normalise before validating.
+            member_path = PurePosixPath(info.filename.replace("\\", "/"))
 
-            if member_path.is_absolute() or ".." in member_path.parts:
+            if (
+                member_path.is_absolute()
+                or ".." in member_path.parts
+                or re.match(r"^[A-Za-z]:", info.filename)
+            ):
                 raise ValueError("ZIP contains an unsafe file path.")
+
+            # Skip names that cannot be created on every platform.
+            if not all(is_portable_name(part) for part in member_path.parts):
+                continue
 
             destination = (extract_folder / Path(*member_path.parts)).resolve()
 
@@ -139,7 +210,7 @@ def extract_zip(zip_path):
             if info.file_size > MAX_SINGLE_FILE_SIZE:
                 continue
 
-            if info.is_dir():
+            if info.is_dir() or info.filename.endswith(("/", "\\")):
                 destination.mkdir(parents=True, exist_ok=True)
                 continue
 
@@ -193,6 +264,46 @@ def clone_github_repo(repo_url):
     clone_url = f"https://github.com/{owner}/{repository}.git"
 
     try:
+        _clone(clone_url, repo_folder)
+        _enforce_repository_limits(repo_folder)
+    except BaseException:
+        remove_tree(workspace)
+        raise
+
+    return str(repo_folder)
+
+
+def _enforce_repository_limits(folder):
+    """Reject cloned repositories that exceed the size or file-count limits."""
+
+    total_size = 0
+    file_count = 0
+
+    for root, _dirs, files in os.walk(folder):
+        for filename in files:
+            file_count += 1
+
+            try:
+                total_size += (Path(root) / filename).lstat().st_size
+            except OSError:
+                continue
+
+            if total_size > MAX_EXTRACTED_SIZE:
+                raise ValueError(
+                    "Repository exceeds the maximum size of "
+                    f"{MAX_EXTRACTED_SIZE // (1024 * 1024)} MB."
+                )
+
+            if file_count > MAX_REPOSITORY_FILES:
+                raise ValueError(
+                    f"Repository has more than {MAX_REPOSITORY_FILES:,} files."
+                )
+
+
+def _clone(clone_url, repo_folder):
+    """Shallow-clone a repository, translating failures to RuntimeError."""
+
+    try:
         subprocess.run(
             [
                 "git",
@@ -219,8 +330,6 @@ def clone_github_repo(repo_url):
         raise RuntimeError(
             "Git is not installed or is not available in your system PATH."
         )
-
-    return str(repo_folder)
 
 
 # ---------------- REPOSITORY FILE DISCOVERY ----------------

@@ -40,12 +40,12 @@ def upload_root(tmp_path, monkeypatch):
     root = tmp_path / "uploads"
     monkeypatch.setenv("CODELENS_UPLOAD_DIR", str(root))
 
-    import utils.file_handler as file_handler
+    from utils import file_handler
 
     monkeypatch.setattr(file_handler, "UPLOAD_DIR", root, raising=False)
 
-    import backend.services.repository_service as repository_service
-    import backend.services.analysis_service as analysis_service
+    from backend.services import repository_service
+    from backend.services import analysis_service
 
     for module in (repository_service, analysis_service):
         if hasattr(module, "UPLOAD_DIR"):
