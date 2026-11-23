@@ -18,7 +18,7 @@ from utils.file_handler import (
     remove_tree,
 )
 from utils.parser import read_file_content
-from utils.security import is_sensitive_file
+from utils.security import is_sensitive_file, resolve_within
 
 _registry_lock = Lock()
 
@@ -246,17 +246,7 @@ def get_file_content(repo_id, relative_path):
     repository = get_repository(repo_id)
     repo_path = Path(repository["path"]).resolve()
 
-    requested_path = Path(relative_path)
-
-    if requested_path.is_absolute() or ".." in requested_path.parts:
-        raise ValueError("Invalid file path.")
-
-    file_path = (repo_path / requested_path).resolve()
-
-    try:
-        file_path.relative_to(repo_path)
-    except ValueError:
-        raise ValueError("File is outside the repository.")
+    file_path = resolve_within(repo_path, relative_path)
 
     if not file_path.is_file():
         raise ValueError("File not found.")

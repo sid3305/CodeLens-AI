@@ -98,6 +98,7 @@ def get_repository_file_content(
             "outside the repository" in message
             or "Sensitive" in message
             or "Invalid file path" in message
+            or "Symbolic links" in message
         ) else 404
 
         raise HTTPException(status_code=status_code, detail=message)

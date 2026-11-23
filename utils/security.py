@@ -131,3 +131,46 @@ def prepare_content_for_llm(file_path, content):
         return None
 
     return redact_secrets(content)
+
+
+# -----------------------------------
+# Links and path containment (SEC-07)
+# -----------------------------------
+
+_DRIVE = re.compile(r"^[A-Za-z]:")
+
+
+def is_link(path):
+    """True for symbolic links and Windows junctions (never followed)."""
+
+    path = Path(path)
+    if path.is_symlink():
+        return True
+    is_junction = getattr(path, "is_junction", None)  # Python 3.12+
+    return bool(is_junction and is_junction())
+
+
+def resolve_within(root, relative):
+    """
+    Resolve a repository-relative path, refusing anything that could leave
+    the repository: absolute paths, drive letters, '..', any symlink or
+    junction along the way, and results that resolve outside ``root``.
+    """
+
+    root = Path(root).resolve()
+    text = str(relative).replace("\\", "/")
+    parts = [part for part in text.split("/") if part not in ("", ".")]
+
+    if text.startswith("/") or _DRIVE.match(text) or ".." in parts:
+        raise ValueError("Invalid file path.")
+
+    current = root
+    for part in parts:
+        current = current / part
+        if is_link(current):
+            raise ValueError("Symbolic links are not followed.")
+
+    resolved = current.resolve()
+    if not resolved.is_relative_to(root):
+        raise ValueError("File is outside the repository.")
+    return resolved

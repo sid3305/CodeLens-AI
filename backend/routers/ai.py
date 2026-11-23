@@ -136,18 +136,10 @@ def explain_repository_file(repo_id: str, request: ExplainRequest):
         repo_path = repository["path"]
 
         # Validate and resolve the file path
-        from utils.security import is_sensitive_file
+        from utils.security import is_sensitive_file, resolve_within
 
-        requested_path = Path(request.file_path)
-        if requested_path.is_absolute() or ".." in requested_path.parts:
-            raise ValueError("Invalid file path.")
-
-        file_path = (Path(repo_path) / requested_path).resolve()
-
-        try:
-            file_path.relative_to(Path(repo_path).resolve())
-        except ValueError:
-            raise ValueError("File is outside the repository.")
+        # Refuses traversal, absolute paths and symlinks/junctions (SEC-07).
+        file_path = resolve_within(repo_path, request.file_path)
 
         if not file_path.is_file():
             raise ValueError("File not found.")

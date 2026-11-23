@@ -11,6 +11,7 @@ from pathlib import Path, PurePosixPath
 from urllib.parse import urlparse
 
 from utils.config import get_upload_dir
+from utils.security import is_link
 
 # ---------------- CONFIGURATION ----------------
 
@@ -233,12 +234,30 @@ def clone_github_repo(repo_url):
 
     try:
         _clone(clone_url, repo_folder)
+        _remove_links(repo_folder)
         _enforce_repository_limits(repo_folder)
     except BaseException:
         remove_tree(workspace)
         raise
 
     return str(repo_folder)
+
+
+def _remove_links(folder):
+    """Delete symlinks and junctions from a clone without touching their targets."""
+
+    for root, dirs, files in os.walk(folder):
+        for name in [*dirs, *files]:
+            path = Path(root) / name
+            if not is_link(path):
+                continue
+            if name in dirs:
+                dirs.remove(name)
+            # rmdir/unlink remove the link itself, never what it points to.
+            if path.is_dir() and not path.is_symlink():
+                os.rmdir(path)
+            else:
+                os.unlink(path)
 
 
 def _enforce_repository_limits(folder):
@@ -321,16 +340,17 @@ def get_code_files(folder_path, include_patterns=()):
 
     for root, dirs, files in os.walk(folder_path):
 
+        # Never descend into symlinked or junctioned directories (SEC-07).
         dirs[:] = [
             d for d in dirs
-            if d.lower() not in IGNORED_FOLDERS
+            if d.lower() not in IGNORED_FOLDERS and not is_link(Path(root) / d)
         ]
 
         for filename in files:
 
             file_path = Path(root) / filename
 
-            if filename.lower() in SENSITIVE_FILENAMES:
+            if filename.lower() in SENSITIVE_FILENAMES or is_link(file_path):
                 continue
 
             if filename.lower().startswith(".env"):
