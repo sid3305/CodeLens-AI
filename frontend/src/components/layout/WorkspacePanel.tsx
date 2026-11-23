@@ -35,7 +35,7 @@ import type {
   SummaryResponse,
 } from '../../types'
 
-import { api } from '../../services/api'
+import { api, errorMessage } from '../../services/api'
 import DependenciesPanel from './DependenciesPanel'
 import MarkdownContent from './MarkdownContent'
 
@@ -53,6 +53,19 @@ interface WorkspacePanelProps {
   onImportGitHub: (url: string) => Promise<void>
   selectedLine: number | null
   onOpenFinding: (path: string, line: number | null) => void
+}
+
+interface SummaryState {
+  repoId: string
+  data: SummaryResponse | null
+  error: string | null
+}
+
+interface ExplanationState {
+  /** `${repositoryId}:${filePath}` */
+  key: string
+  text: string | null
+  error: string | null
 }
 
 const sectionTitles: Record<WorkspaceSection, string> = {
@@ -303,28 +316,76 @@ export default function WorkspacePanel({
   const [findingSearch, setFindingSearch] = useState('')
   const [severityFilter, setSeverityFilter] = useState('All')
   const [analyzerFilter, setAnalyzerFilter] = useState('All')
-  const [aiSummary, setAiSummary] = useState<SummaryResponse | null>(null)
-  const [generatingSummary, setGeneratingSummary] = useState(false)
-  const [fileExplanation, setFileExplanation] = useState<string | null>(null)
-  const [explainingFile, setExplainingFile] = useState(false)
+  const repositoryId = repository?.id ?? null
 
-  // Auto-generate AI summary when repository loads
+  // AI results are stored together with the repository/file they belong to.
+  // Rendering only uses a result whose key matches what is currently shown,
+  // so a stale result can never be displayed for another repository or file.
+  const [summaryState, setSummaryState] = useState<SummaryState | null>(null)
+  const [generatingSummaryFor, setGeneratingSummaryFor] = useState<string | null>(null)
+  const [explanationState, setExplanationState] = useState<ExplanationState | null>(null)
+  const [explainingKey, setExplainingKey] = useState<string | null>(null)
+
+  // Load an existing summary only. Generating one sends repository code to the
+  // LLM provider, so it happens exclusively on an explicit user action.
   useEffect(() => {
-    if (repository && !aiSummary && !generatingSummary) {
-      const generate = async () => {
-        setGeneratingSummary(true)
-        try {
-          const summary = await api.generateSummary(repository.id)
-          setAiSummary(summary)
-        } catch (error) {
-          console.error('Failed to generate summary:', error)
-        } finally {
-          setGeneratingSummary(false)
+    if (!repositoryId) return
+
+    let cancelled = false
+
+    api.getSummary(repositoryId).then(
+      (data) => {
+        if (!cancelled) setSummaryState({ repoId: repositoryId, data, error: null })
+      },
+      (error: unknown) => {
+        if (!cancelled) {
+          setSummaryState({
+            repoId: repositoryId,
+            data: null,
+            error: errorMessage(error, 'Unable to load the saved summary.'),
+          })
         }
-      }
-      generate()
+      },
+    )
+
+    return () => {
+      cancelled = true
     }
-  }, [repository, aiSummary, generatingSummary])
+  }, [repositoryId])
+
+  const currentSummary =
+    summaryState && summaryState.repoId === repositoryId ? summaryState : null
+  const aiSummary = currentSummary?.data ?? null
+  const summaryError = currentSummary?.error ?? null
+  const generatingSummary =
+    repositoryId !== null && generatingSummaryFor === repositoryId
+
+  const handleGenerateSummary = async () => {
+    if (!repositoryId) return
+
+    const targetId = repositoryId
+    setGeneratingSummaryFor(targetId)
+
+    try {
+      const data = await api.generateSummary(targetId)
+      setSummaryState({ repoId: targetId, data, error: null })
+    } catch (error) {
+      setSummaryState((previous) => ({
+        repoId: targetId,
+        data: previous?.repoId === targetId ? previous.data : null,
+        error: errorMessage(error, 'Failed to generate the summary.'),
+      }))
+    } finally {
+      setGeneratingSummaryFor((current) => (current === targetId ? null : current))
+    }
+  }
+
+  const fileKey =
+    repositoryId && selectedFilePath ? `${repositoryId}:${selectedFilePath}` : null
+  const currentExplanation =
+    explanationState && explanationState.key === fileKey ? explanationState : null
+  const fileExplanation = currentExplanation?.text ?? null
+  const explainingFile = fileKey !== null && explainingKey === fileKey
 
   const handleGitHubImport = async () => {
     if (!githubUrl.trim()) return
@@ -335,16 +396,22 @@ export default function WorkspacePanel({
   }
 
   const handleExplainFile = async () => {
-    if (!repository || !selectedFilePath || !selectedFileContent) return
+    if (!repositoryId || !selectedFilePath || !fileKey) return
 
-    setExplainingFile(true)
+    const targetKey = fileKey
+    setExplainingKey(targetKey)
+
     try {
-      const response = await api.explainFile(repository.id, selectedFilePath)
-      setFileExplanation(response.explanation)
+      const response = await api.explainFile(repositoryId, selectedFilePath)
+      setExplanationState({ key: targetKey, text: response.explanation, error: null })
     } catch (error) {
-      console.error('Failed to explain file:', error)
+      setExplanationState({
+        key: targetKey,
+        text: null,
+        error: errorMessage(error, 'Failed to explain this file.'),
+      })
     } finally {
-      setExplainingFile(false)
+      setExplainingKey((current) => (current === targetKey ? null : current))
     }
   }
 
@@ -600,48 +667,38 @@ const filteredFindings = findings.filter((finding) => {
                   <div className="ai-summary-text">
                     <MarkdownContent content={aiSummary.summary} />
                   </div>
+                  {summaryError && (
+                    <p className="inline-error" role="alert">{summaryError}</p>
+                  )}
                   <button
                     className="secondary-button regenerate-btn"
-                    onClick={() => {
-                      setAiSummary(null)
-                      setGeneratingSummary(true)
-                      api.generateSummary(repository!.id).then(s => {
-                        setAiSummary(s)
-                        setGeneratingSummary(false)
-                      }).catch(() => setGeneratingSummary(false))
-                    }}
-                    style={{ marginTop: '16px' }}
+                    onClick={() => void handleGenerateSummary()}
+                    disabled={generatingSummary}
                   >
                     <RefreshCw size={14} />
                     Regenerate Summary
                   </button>
                 </div>
-              ) : analysis ? (
-                <div className="empty-content compact-empty">
-                  <CheckCircle2 size={22} />
-                  <h3>Static analysis completed</h3>
-                  <p>
-                    {analysis.summary.total_findings} consolidated findings
-                    from {Object.keys(analysis.tool_status).length} analyzers.
-                    {' '}
-                    {analysis.summary.duplicates_removed} duplicate findings
-                    were consolidated.
-                  </p>
-                  <p style={{ marginTop: '12px', fontSize: '13px', opacity: 0.7 }}>
-                    Click "Generate AI Summary" for an architectural overview.
-                  </p>
-                </div>
               ) : (
                 <div className="empty-content">
-                  <FolderGit2 size={25} />
-                  <h3>No repository analysis yet</h3>
+                  <Brain size={25} />
+                  <h3>No AI summary yet</h3>
                   <p>
-                    Run Code Analysis to inspect your repository using
-                    Ruff, Bandit, Semgrep and Gitleaks.
+                    Generating a summary sends up to 30,000 characters of this
+                    repository&rsquo;s source code (secrets redacted) to the
+                    configured AI provider.
                   </p>
-                  <p style={{ marginTop: '12px', fontSize: '13px', opacity: 0.7 }}>
-                    Then generate an AI summary for architectural insights.
-                  </p>
+                  {summaryError && (
+                    <p className="inline-error" role="alert">{summaryError}</p>
+                  )}
+                  <button
+                    className="secondary-button"
+                    onClick={() => void handleGenerateSummary()}
+                    disabled={generatingSummary}
+                  >
+                    <Sparkles size={16} />
+                    Generate AI summary
+                  </button>
                 </div>
               )}
             </section>

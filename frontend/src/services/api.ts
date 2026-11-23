@@ -153,6 +153,20 @@ export interface DependenciesAnalysisResponse {
   generated_at: string
 }
 
+export class ApiError extends Error {
+  readonly status: number
+
+  constructor(message: string, status: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+export function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
@@ -164,12 +178,12 @@ async function request<T>(
 
     try {
       const error = await response.json()
-      message = error.detail || message
+      if (typeof error.detail === 'string') message = error.detail
     } catch {
       // Keep the default error message.
     }
 
-    throw new Error(message)
+    throw new ApiError(message, response.status)
   }
 
   return response.json() as Promise<T>
@@ -225,6 +239,18 @@ export const api = {
     `/repositories/${encodeURIComponent(repoId)}`,
     { method: 'DELETE' },
   ),
+
+  /** Previously generated summary, or null if none exists. Never calls the LLM. */
+  getSummary: async (repoId: string): Promise<SummaryResponse | null> => {
+    try {
+      return await request<SummaryResponse>(
+        `/repositories/${encodeURIComponent(repoId)}/summary`,
+      )
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null
+      throw error
+    }
+  },
 
   generateSummary: (repoId: string) =>
     request<SummaryResponse>(
