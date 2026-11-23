@@ -68,14 +68,14 @@ def test_provider_errors_are_wrapped(monkeypatch):
         utils.llm.call_llm("prompt")
 
 
-def test_repo_agent_truncates_and_redacts(fake_llm):
-    content = "password = 'hunter2'\n" + "x" * 40_000
+def test_repo_agent_drops_low_priority_sections_and_redacts(fake_llm):
+    sections = ["Repository: demo\npassword = 'hunter2'", "README (start):\n" + "x" * 40_000]
 
-    result = run_repo_agent(content)
+    result = run_repo_agent(sections)
 
     (prompt,) = fake_llm.calls
-    assert "hunter2" not in prompt
-    assert len(prompt) < 32_000
+    assert "hunter2" not in prompt and "Repository: demo" in prompt
+    assert len(prompt) <= 3000 * 4
     assert "Only a portion" in result
 
 

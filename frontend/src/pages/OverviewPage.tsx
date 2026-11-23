@@ -66,7 +66,7 @@ export default function OverviewPage({ repository }: { repository: Repository })
         aiNotice={
           <AiConsentNotice
             repoId={repository.id}
-            sends="this repository's source code, trimmed to the token limit,"
+            sends="a fact sheet about this repository (languages, dependencies, structure, top findings, the start of the README and function signatures; no full source)"
             estimate={SUMMARY_ESTIMATE}
           />
         }

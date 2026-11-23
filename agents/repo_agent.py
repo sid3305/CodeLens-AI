@@ -6,23 +6,29 @@ from utils.token_budget import (
     estimate_tokens,
     max_input_tokens,
     max_output_tokens,
-    trim_to_tokens,
 )
 
 TRUNCATION_NOTE = "\n\nNote: Only a portion of the repository was included due to context limits."
 
 
-def build_request(repository_content: str) -> tuple[LlmRequest, bool]:
-    """The exact summary request, trimmed to the token budget; (request, trimmed)."""
+def build_request(sections: list[str]) -> tuple[LlmRequest, bool]:
+    """
+    The summary request from fact-sheet sections (highest priority first),
+    dropping sections from the bottom until it fits; (request, dropped any).
+    """
 
-    if not repository_content or not repository_content.strip():
+    if not sections or not any(section.strip() for section in sections):
         raise ValueError("Repository content is empty.")
-    overhead = estimate_tokens(REPOSITORY_SUMMARY_PROMPT.format(content=""))
-    content, trimmed = trim_to_tokens(redact_secrets(repository_content), max_input_tokens() - overhead)
-    return LlmRequest(system="", prompt=REPOSITORY_SUMMARY_PROMPT.format(content=content), max_output=max_output_tokens()), trimmed
+    kept = list(sections)
+    while True:
+        prompt = REPOSITORY_SUMMARY_PROMPT.format(content=redact_secrets("\n\n".join(kept)))
+        if estimate_tokens(prompt) <= max_input_tokens() or len(kept) == 1:
+            break
+        kept.pop()
+    return LlmRequest(system="", prompt=prompt, max_output=max_output_tokens()), len(kept) < len(sections)
 
 
-def run_repo_agent(repository_content: str) -> str:
-    request, trimmed = build_request(repository_content)
+def run_repo_agent(sections: list[str]) -> str:
+    request, dropped = build_request(sections)
     response = call_llm(request.prompt, request.max_output, system=request.system or None)
-    return response + TRUNCATION_NOTE if trimmed else response
+    return response + TRUNCATION_NOTE if dropped else response

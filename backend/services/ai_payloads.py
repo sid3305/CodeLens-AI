@@ -4,34 +4,21 @@ What each AI task sends, built from a repository. Shared by the AI routes
 notice always describes the real payload.
 """
 
-from pathlib import Path
 
 from agents.finding_agent import code_window
 from backend.schemas.ai import MAX_SELECTION_LINES
 from backend.services.analysis_service import get_analysis_results
-from utils.file_handler import get_code_files
+from backend.services.fact_sheet import collect_facts, fact_sections
 from utils.parser import read_file_content
-from utils.security import is_sensitive_file, prepare_content_for_llm, resolve_within
+from utils.security import is_sensitive_file, resolve_within
 
 MAX_FILE_BYTES = 1024 * 1024
 
 
-def summary_content(repository: dict) -> str:
-    """Repository-relative files, sensitive ones skipped, the rest redacted."""
+def summary_content(repository: dict) -> list[str]:
+    """The fact sheet (no raw source): sections in priority order."""
 
-    root = Path(repository["path"]).resolve()
-    parts = []
-    for file_path in get_code_files(root):
-        content = read_file_content(file_path)
-        if content.startswith("Error reading file:"):
-            continue
-        relative = Path(file_path).relative_to(root).as_posix()
-        safe = prepare_content_for_llm(relative, content)
-        if safe is not None:
-            parts.append(f"FILE: {relative}\n{safe}")
-    if not parts:
-        raise ValueError("No readable code content found.")
-    return "\n\n".join(parts)
+    return fact_sections(collect_facts(repository["id"], repository), repository)
 
 
 def explain_content(repository: dict, relative: str, start: int | None, end: int | None) -> str:

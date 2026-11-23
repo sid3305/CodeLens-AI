@@ -199,13 +199,14 @@ def test_explain_marks_truncated_files(client, repo, fake_llm):
 # --- AI summary ----------------------------------------------------------------
 
 
-def test_summary_marks_truncation(client, repo, fake_llm):
-    (_repo_path(repo["id"]) / "long.py").write_text("x = 1\n" * 6_000)
+def test_summary_sends_a_fact_sheet_not_source(client, repo, fake_llm):
+    (_repo_path(repo["id"]) / "long.py").write_text("RAW_SOURCE_MARKER = 1\n" * 6_000)
 
     body = client.post(f"/api/repositories/{repo['id']}/summary").json()
 
-    assert body["truncated"] is True
-    assert "Only a portion" in body["summary"]
+    (prompt,) = fake_llm.calls
+    assert "RAW_SOURCE_MARKER" not in prompt and "Languages: Python" in prompt
+    assert len(prompt) <= 3000 * 4 and body["truncated"] is False
 
 
 def test_summary_never_sends_sensitive_files(client, repo, fake_llm):
