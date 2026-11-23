@@ -16,6 +16,7 @@ from typing import Any
 
 from backend.services.analysis_service import get_analysis_results
 from backend.services.dependency_service import get_dependency_report
+from backend.services.fact_sheet import collect_facts, static_summary
 from backend.services.repository_service import (
     get_repository,
     get_saved_repository_summary,
@@ -120,6 +121,8 @@ def build_report(repo_id: str, *, include_summary: bool = False) -> dict[str, An
                 "unresolved_imports", "skipped_files", "circular_dependencies",
             )
         },
+        # Always present: written from the facts, no AI.
+        "static_summary": static_summary(collect_facts(repo_id, repository)),
         "ai_summary": None if not summary else {
             "text": summary.get("summary"),
             "generated_at": summary.get("generated_at"),

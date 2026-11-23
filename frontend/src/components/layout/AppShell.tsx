@@ -141,10 +141,13 @@ export default function AppShell() {
     if (job.kind === 'analysis' && repoId) {
       const result = job.result as AnalysisResponse
       queryClient.setQueryData(queryKeys.analysis(repoId), result)
+      // The static summary is written from these facts.
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.analysis(repoId), 'static-summary'] })
       const outcome = describeAnalysis(result)
       notify(outcome.tone, outcome.message)
     } else if (job.kind === 'dependencies' && repoId) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.dependencies(repoId) })
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.analysis(repoId), 'static-summary'] })
     } else if (job.kind === 'import') {
       const repository = job.result as Repository
       void queryClient.invalidateQueries({ queryKey: queryKeys.repositories }).then(() => {

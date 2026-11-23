@@ -44,7 +44,7 @@ ul.plain { list-style:none; margin:0; padding:0; } ul.plain li { padding:2px 0; 
 </header>
 <main>
   <div id="notes"></div>
-  <section aria-labelledby="summary-h"><h2 id="summary-h">Summary</h2><div class="stats" id="stats"></div><p class="muted" id="analyzers"></p></section>
+  <section aria-labelledby="summary-h"><h2 id="summary-h">Summary</h2><ul class="plain" id="static-summary"></ul><div class="stats" id="stats"></div><p class="muted" id="analyzers"></p></section>
   <section aria-labelledby="ai-h" id="ai-section" hidden><h2 id="ai-h">AI summary</h2><p class="muted" id="ai-meta"></p><div class="summary" id="ai-text"></div></section>
   <section aria-labelledby="tree-h"><h2 id="tree-h">Repository tree</h2>
     <p class="muted">↗ files this file imports · ↙ files that import it (repository files only)</p><div id="tree"></div></section>
@@ -80,6 +80,12 @@ ul.plain { list-style:none; margin:0; padding:0; } ul.plain li { padding:2px 0; 
   document.getElementById('generated').textContent = 'Generated on ' + new Date(R.generated_at).toLocaleString() + ' from ' + R.repository.name +
     (R.repository.ref ? ' @ ' + R.repository.ref : '') + ' · ' + R.tool.name + ' ' + R.tool.version;
   R.notes.forEach(function (n) { document.getElementById('notes').appendChild(el('p', { 'class': 'note', text: n })); });
+
+  // Static summary (no AI): "- **Label:** text" lines, rendered as text.
+  (R.static_summary || '').split('\n').forEach(function (line) {
+    var m = /^- \*\*(.+?):\*\* (.*)$/.exec(line); if (!m) return;
+    document.getElementById('static-summary').appendChild(el('li', {}, [el('strong', { text: m[1] + ': ' }), document.createTextNode(m[2].replace(/`/g, ''))]));
+  });
 
   // Summary
   var deps = R.dependencies, counts = {};

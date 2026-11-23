@@ -34,3 +34,13 @@ def test_export_is_self_contained_and_leaks_nothing(client, monkeypatch, upload_
     assert report["findings"][0]["file"] == "app/main.py" and report["findings"][0]["snippet"]
     assert report["ai_summary"] is None and ".env" not in report["files"]
     assert json.loads(sarif.text)["runs"][0]["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"] == "app/main.py"
+
+
+def test_static_summary_needs_no_ai(client, fake_llm):
+    repo = upload_repo(client, {"app/main.py": "import os\n", "README.md": "# Demo\nA tiny demo app.\n"})
+
+    body = client.get(f"/api/repositories/{repo['id']}/static-summary").json()
+
+    assert "**What it is:** sample, a Python project" in body["markdown"]
+    assert "A tiny demo app." in body["markdown"] and "`app/main.py`" in body["markdown"]
+    assert fake_llm.calls == []

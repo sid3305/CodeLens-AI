@@ -158,3 +158,50 @@ def fact_sections(facts: dict[str, Any], repository: dict) -> list[str]:
     if signatures:
         sections.append(_cap(f"Signatures of the most imported files:\n{signatures}", CAPS["signatures"]))
     return sections
+
+
+def _readme_line(readme: str) -> str:
+    """The first sentence-like line of the README that is not a heading or badge."""
+
+    for line in readme.splitlines():
+        text = line.strip()
+        if text and not text.startswith(("#", "!", "[", "<", "=", "-", "`")):
+            return text[:200]
+    return ""
+
+
+def static_summary(facts: dict[str, Any]) -> str:
+    """A summary written from the facts with fixed sentences: no LLM, no tokens."""
+
+    languages = facts["languages"]
+    main_language = languages[0][0] if languages else "multi-language"
+    others = ", ".join(f"{name} ({count})" for name, count in languages) or "no recognised languages"
+    counts = facts["import_counts"]
+    bullets = [
+        f"**What it is:** {facts['name']}, a {main_language} project with {facts['total_files']} files ({others}).",
+    ]
+    readme = _readme_line(facts["readme"])
+    if readme:
+        bullets.append(f"**From the README:** {readme}")
+    bullets.append(
+        f"**Stack:** {', '.join(facts['declared'][:8]) or 'no declared dependencies'}; "
+        f"{facts['external_count']} external packages imported "
+        f"({counts['internal']} internal, {counts['stdlib']} standard-library, {counts['external']} external imports)."
+    )
+    hotspots = ", ".join(f"`{path}` ({n})" for path, n in facts["hotspots"][:3])
+    bullets.append(
+        f"**Structure:** {'most imported: ' + hotspots if hotspots else 'no internal imports between files'}; "
+        f"{len(facts['cycles'])} import cycle{'s' if len(facts['cycles']) != 1 else ''}."
+    )
+    if facts["analysed"]:
+        severity = ", ".join(f"{n} {s}" for s, n in sorted(facts["severity_counts"].items(), key=lambda i: SEVERITY_RANK.get(i[0], 9)))
+        top = facts["top_findings"][0] if facts["top_findings"] else None
+        risk = f"{facts['findings_total']} findings ({severity})" if facts["findings_total"] else "the analyzers found nothing"
+        if top:
+            risk += f"; most severe: {top['title']} in `{top['file']}`"
+        bullets.append(f"**Risks:** {risk}.")
+    else:
+        bullets.append("**Risks:** run an analysis to list findings.")
+    start = [f"`{p}`" for p in facts["entry_points"][:3]] or [f"`{p}`" for p, _ in facts["hotspots"][:1]]
+    bullets.append(f"**Where to start:** {', '.join(start) if start else 'the README'}.")
+    return "\n".join(f"- {bullet}" for bullet in bullets)

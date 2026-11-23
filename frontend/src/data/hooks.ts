@@ -50,6 +50,15 @@ export function useAnalysis(repoId: string | null) {
   })
 }
 
+/** The static summary (no AI). Refetched after an analysis, which changes its facts. */
+export function useStaticSummary(repoId: string) {
+  return useQuery({
+    queryKey: [...queryKeys.analysis(repoId), 'static-summary'],
+    queryFn: ({ signal }) => api.getStaticSummary(repoId, signal),
+    select: (data) => data.markdown,
+  })
+}
+
 /** Saved AI summary, or null. Reading never calls the LLM. */
 export function useSavedSummary(repoId: string) {
   return useQuery({

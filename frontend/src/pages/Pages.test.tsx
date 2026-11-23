@@ -26,6 +26,7 @@ vi.mock('../services/api', async (importOriginal) => {
       getFileContent: vi.fn(),
       explainFile: vi.fn(),
       explainSelection: vi.fn(),
+      getStaticSummary: vi.fn(async (id: string) => ({ repository_id: id, markdown: '- **What it is:** a **static** summary.', generated_at: '' })),
     },
   }
 })
@@ -342,5 +343,15 @@ describe('code viewer in the file preview (C5)', () => {
     expect(onSelectLine).toHaveBeenCalledWith(3)
     expect(screen.getByRole('heading', { name: 'Findings in this file (1)' })).toBeInTheDocument()
     expect(document.querySelectorAll('.cm-finding-marker')).toHaveLength(1)
+  })
+})
+
+describe('static summary (TOKENS-5)', () => {
+  it('is shown by default and needs no AI call', async () => {
+    renderWithProviders(overview(repoA))
+
+    expect(await screen.findByText('static')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'AI summary (optional)' })).toBeInTheDocument()
+    expect(mockedApi.generateSummary).not.toHaveBeenCalled()
   })
 })

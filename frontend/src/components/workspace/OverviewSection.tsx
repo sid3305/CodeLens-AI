@@ -12,6 +12,7 @@ import {
   CardHeader,
   EmptyState,
   InlineMessage,
+  LoadingBlock,
   SeverityBadge,
   StatTile,
 } from '../ui'
@@ -32,6 +33,7 @@ export default function OverviewSection({
   onGenerateSummary,
   aiAllowed,
   aiNotice,
+  staticSummary,
 }: {
   files: RepositoryFile[]
   analysis: AnalysisResponse | null
@@ -44,6 +46,8 @@ export default function OverviewSection({
   aiAllowed: boolean
   /** What is sent and to which provider, with the consent control. */
   aiNotice: ReactNode
+  /** Written from the analysis facts with fixed sentences: no AI. */
+  staticSummary: string | null
 }) {
   const counts = analysis?.summary.severity_counts ?? {}
   const analyzersRun = outcome
@@ -67,7 +71,7 @@ export default function OverviewSection({
         <CardHeader
           titleId="summary-heading"
           title="Project summary"
-          description="AI-generated overview of what the repository does"
+          description="Written from the analysis, without AI"
           actions={
             summary ? (
               <Badge tone="accent" icon={<Sparkles size={12} aria-hidden="true" />}>
@@ -78,6 +82,15 @@ export default function OverviewSection({
           }
         />
         <CardBody>
+          {staticSummary ? (
+            <div className="prose-content">
+              <MarkdownContent content={staticSummary} />
+            </div>
+          ) : (
+            <LoadingBlock label="Loading the summary" lines={4} />
+          )}
+          <div className="mt-5 border-t border-border pt-4">
+          <h3 className="mb-2 text-sm font-semibold text-fg">AI summary (optional)</h3>
           {summary ? (
             <>
               <div className="prose-content">
@@ -118,6 +131,7 @@ export default function OverviewSection({
               }
             />
           )}
+          </div>
         </CardBody>
       </Card>
 

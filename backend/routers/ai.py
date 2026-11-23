@@ -25,6 +25,7 @@ from backend.services.ai_payloads import (
     finding_window,
     summary_content,
 )
+from backend.services.fact_sheet import collect_facts, static_summary
 from backend.services.repository_service import (
     get_repository,
     get_saved_repository_summary,
@@ -186,6 +187,21 @@ def update_ai_consent(repo_id: str, request: AiConsentRequest):
         raise HTTPException(status_code=404, detail=str(error))
     return _consent_response(repo_id, enabled)
 
+
+
+@router.get("/{repo_id}/static-summary")
+def get_static_summary(repo_id: str):
+    """A summary written from the analysis facts with fixed sentences. No AI, no consent needed."""
+
+    try:
+        repository = get_repository(repo_id)
+    except ValueError as error:
+        raise HTTPException(status_code=404, detail=str(error))
+    return {
+        "repository_id": repo_id,
+        "markdown": static_summary(collect_facts(repo_id, repository)),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 @router.get("/{repo_id}/summary", response_model=SummaryResponse | None)

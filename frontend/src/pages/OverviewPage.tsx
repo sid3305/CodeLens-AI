@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react'
 import { FileDown } from 'lucide-react'
 
 import { Button } from '../components/ui'
-import { useAiAllowed, useAnalysis, useGenerateSummary, useRepositoryFiles, useSavedSummary } from '../data/hooks'
+import { useStaticSummary, useAiAllowed, useAnalysis, useGenerateSummary, useRepositoryFiles, useSavedSummary } from '../data/hooks'
 import AiConsentNotice from '../components/ai/AiConsent'
 import { describeAnalysis } from '../lib/analysis'
 import { errorMessage } from '../services/api'
@@ -22,6 +22,7 @@ export default function OverviewPage({ repository }: { repository: Repository })
   const saved = useSavedSummary(repository.id)
   const generate = useGenerateSummary(repository.id)
   const aiAllowed = useAiAllowed(repository.id)
+  const staticSummary = useStaticSummary(repository.id).data ?? null
   const [exportOpen, setExportOpen] = useState(false)
 
   const result = analysis.data ?? null
@@ -63,6 +64,7 @@ export default function OverviewPage({ repository }: { repository: Repository })
         generatingSummary={generate.isPending}
         onGenerateSummary={(force) => generate.mutate(force)}
         aiAllowed={aiAllowed}
+        staticSummary={staticSummary}
         aiNotice={
           <AiConsentNotice
             repoId={repository.id}

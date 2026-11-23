@@ -146,6 +146,10 @@ export const api = {
       { signal },
     ),
 
+  /** Written from the analysis facts with fixed sentences: no AI, no consent. */
+  getStaticSummary: (repoId: string, signal?: AbortSignal) =>
+    request<{ repository_id: string; markdown: string; generated_at: string }>(`${repo(repoId)}/static-summary`, { signal }),
+
   getAiConsent: (repoId: string, signal?: AbortSignal) =>
     request<AiConsent>(`${repo(repoId)}/ai-consent`, { signal }),
 
