@@ -76,7 +76,8 @@ class GroqProvider:
         try:
             client = Groq(api_key=self._api_key)
             response = client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=max_tokens, temperature=0
+                model=self.model, messages=messages, max_tokens=max_tokens, temperature=0,
+                **({"reasoning_effort": "low"} if is_reasoning_model(self.model) else {}),
             )
             return response.choices[0].message.content or ""
         except AIServiceError:
@@ -148,6 +149,30 @@ class OllamaProvider:
 
 PROVIDERS = {"groq": GroqProvider, "ollama": OllamaProvider}
 
+# Reasoning models spend output tokens on hidden reasoning before answering.
+REASONING_MODELS = ("openai/gpt-oss", "gpt-oss", "deepseek-r1", "qwen/qwen3", "qwen3")
+
+
+def is_reasoning_model(model: str) -> bool:
+    return model.lower().startswith(REASONING_MODELS)
+
+
+def effective_output_tokens(requested: int | None) -> int:
+    """
+    The output allowance actually sent. Reasoning models get the whole
+    budget: with a small cap their reasoning uses it up and the answer is
+    empty. The prompts still ask for short answers.
+    """
+
+    limit = max_output_tokens()
+    try:
+        model = get_provider().model
+    except AINotConfiguredError:
+        model = ""
+    if is_reasoning_model(model):
+        return limit
+    return min(requested or limit, limit)
+
 
 def get_provider() -> Provider:
     choice = (os.getenv("CODELENS_LLM_PROVIDER") or "groq").strip().lower()
@@ -179,11 +204,18 @@ def call_llm(prompt: str, max_tokens: int | None = None, *, system: str | None =
     request = LlmRequest(
         system=redact_secrets(system or ""),
         prompt=redact_secrets(prompt),
-        max_output=min(max_tokens or max_output_tokens(), max_output_tokens()),
+        max_output=effective_output_tokens(max_tokens),
     )
     check(request)
     messages = []
     if request.system:
         messages.append({"role": "system", "content": request.system})
     messages.append({"role": "user", "content": request.prompt})
-    return get_provider().complete(messages, request.max_output)
+    answer = get_provider().complete(messages, request.max_output)
+    if not (answer or "").strip():
+        # Never saved or cached: an empty answer is a failure, not a result.
+        raise AIServiceError(
+            "The AI returned an empty answer (its output limit was used up). "
+            f"Raise CODELENS_LLM_MAX_OUTPUT_TOKENS (now {max_output_tokens()}) and try again."
+        )
+    return answer

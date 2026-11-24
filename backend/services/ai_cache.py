@@ -78,7 +78,7 @@ def cached_answer(repo_id: str, task: str, content_fingerprint: str, ask, *, for
     key = make_key(repo_id, task, content_fingerprint)
     if not force:
         hit = get(repo_id, key)
-        if hit is not None:
+        if hit is not None and (hit.get("text") or "").strip():
             return hit["text"], True
     text = ask()
     put(repo_id, key, text)

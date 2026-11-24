@@ -33,8 +33,13 @@ from backend.services.repository_service import (
     save_repository_summary,
     set_ai_consent,
 )
-from utils.llm import AINotConfiguredError, AIServiceError, provider_info
-from utils.token_budget import LlmRequest, max_input_tokens, max_output_tokens
+from utils.llm import (
+    AINotConfiguredError,
+    AIServiceError,
+    effective_output_tokens,
+    provider_info,
+)
+from utils.token_budget import LlmRequest, max_input_tokens
 
 router = APIRouter(
     prefix="/api/repositories",
@@ -121,7 +126,7 @@ def finding_ai(repo_id: str, finding_id: str, request: FindingAiRequest):
 def _estimate(request: LlmRequest) -> AiEstimateResponse:
     return AiEstimateResponse(
         input_tokens=request.input_tokens,
-        output_tokens=request.max_output,
+        output_tokens=effective_output_tokens(request.max_output),
         max_input_tokens=max_input_tokens(),
         within_budget=request.input_tokens <= max_input_tokens(),
     )
@@ -166,7 +171,7 @@ def estimate_findings(repo_id: str):
         item["id"]: finding_agent.build_request(item, "explain", finding_window(repository, item)).input_tokens
         for item in findings
     }
-    return {"output_tokens": max_output_tokens(), "max_input_tokens": max_input_tokens(), "findings": counts}
+    return {"output_tokens": effective_output_tokens(None), "max_input_tokens": max_input_tokens(), "findings": counts}
 
 
 @router.get("/{repo_id}/ai-consent", response_model=AiConsentResponse)
@@ -215,7 +220,8 @@ def get_repository_summary(repo_id: str):
         repository = get_repository(repo_id)
         saved_summary = get_saved_repository_summary(repo_id)
 
-        if not saved_summary:
+        # An empty saved answer (from an earlier failure) counts as none.
+        if not saved_summary or not (saved_summary.get("summary") or "").strip():
             return None
 
         return SummaryResponse(

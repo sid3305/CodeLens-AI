@@ -53,7 +53,8 @@ def test_successful_call(monkeypatch):
     sent = _FakeGroq.last.chat.completions.kwargs
     assert _FakeGroq.last.api_key == "test-key"
     assert sent["model"] == utils.llm.MODEL_NAME
-    assert sent["max_tokens"] == 55
+    # The default model reasons, so it gets the full output budget.
+    assert sent["max_tokens"] == 700
     assert sent["messages"] == [{"role": "user", "content": "prompt"}]
 
 

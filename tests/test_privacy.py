@@ -402,7 +402,7 @@ def test_explain_selection_rejects_bad_ranges(client, fake_llm, start, end):
 
 def test_over_budget_requests_are_refused_before_sending(monkeypatch):
     sent = []
-    monkeypatch.setattr(utils.llm, "get_provider", lambda: type("P", (), {"complete": lambda self, m, t: sent.append(t) or "ok"})())
+    monkeypatch.setattr(utils.llm, "get_provider", lambda: type("P", (), {"model": "llama-3.1-8b-instant", "complete": lambda self, m, t: sent.append(t) or "ok"})())
     monkeypatch.setenv("CODELENS_LLM_MAX_INPUT_TOKENS", "100")
 
     with pytest.raises(ValueError, match="over the limit of 100"):
@@ -418,7 +418,8 @@ def test_estimate_counts_the_real_payload_and_sends_nothing(client, fake_llm):
                        json={"task": "explain", "file_path": "app/main.py", "start_line": 1, "end_line": 10}).json()
 
     assert 0 < body["input_tokens"] < body["max_input_tokens"] == 3000
-    assert body["output_tokens"] == 300 and body["within_budget"] is True
+    # The default model (gpt-oss) reasons, so it gets the full output budget.
+    assert body["output_tokens"] == 700 and body["within_budget"] is True
     assert fake_llm.calls == []
 
 
@@ -433,3 +434,13 @@ def test_answers_are_cached_and_regenerate_asks_again(client, fake_llm):
 
     assert (first["cached"], again["cached"], forced["cached"]) == (False, True, False)
     assert len(fake_llm.calls) == 2
+
+
+def test_empty_answers_are_errors_and_reasoning_models_get_the_full_budget(monkeypatch):
+    sent = []
+    provider = type("P", (), {"model": "openai/gpt-oss-120b", "complete": lambda self, m, t: sent.append(t) or "  "})()
+    monkeypatch.setattr(utils.llm, "get_provider", lambda: provider)
+
+    with pytest.raises(utils.llm.AIServiceError, match="empty answer"):
+        utils.llm.call_llm("hello", max_tokens=250)
+    assert sent == [700]
