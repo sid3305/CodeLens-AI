@@ -85,19 +85,22 @@ cd frontend; npm run dev
 Open http://localhost:5173. The frontend expects the API at `http://127.0.0.1:8000` (override with
 `VITE_API_URL`).
 
-## Deploy (Docker / Hugging Face Spaces)
+## Deploy (Docker / Render)
 
-The `Dockerfile` builds one container: the backend serves the built frontend on port 7860, with
-Git, Ruff, Bandit, Semgrep and Gitleaks included.
+The `Dockerfile` builds one container: the backend serves the built frontend on `$PORT`
+(default 7860), with Git, Ruff, Bandit and Gitleaks included (Semgrep with
+`--build-arg WITH_SEMGREP=true`).
 
 ```powershell
 docker build -t codelens-ai .
 docker run -p 7860:7860 -e GROQ_API_KEYS=gsk_a,gsk_b codelens-ai
 ```
 
-On a Hugging Face Space (SDK: Docker), add `GROQ_API_KEYS` (or `GROQ_API_KEY`) under
-*Settings → Variables and secrets* as a **secret**. Imported repositories are kept inside the
-container, so they are lost when the Space restarts or sleeps.
+**Render (free):** `render.yaml` describes the service. Open
+<https://render.com/deploy?repo=https://github.com/sid3305/CodeLens-AI>, sign in, and enter your
+Groq key(s) for `GROQ_API_KEYS` when asked. The free plan sleeps after 15 minutes without
+visitors (the next visit wakes it in about a minute) and has no disk: imported repositories are
+lost when it restarts or sleeps.
 
 ## Supported import links
 

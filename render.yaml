@@ -1,0 +1,14 @@
+# Render Blueprint: one free Docker web service built from this repository.
+# Deploy: https://render.com/deploy?repo=https://github.com/sid3305/CodeLens-AI
+services:
+  - type: web
+    name: codelens-ai
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      # One or more Groq keys separated by commas; Render asks for the value.
+      - key: GROQ_API_KEYS
+        sync: false

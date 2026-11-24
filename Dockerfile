@@ -1,9 +1,12 @@
 # CodeLens AI in one container: the FastAPI backend serves the built
-# React frontend on one port. Built for Hugging Face Spaces (port 7860,
-# user 1000); runs anywhere Docker runs.
+# React frontend on one port ($PORT, default 7860). Deployed on Render's
+# free plan (render.yaml); runs anywhere Docker runs.
 #
 #   docker build -t codelens-ai .
 #   docker run -p 7860:7860 -e GROQ_API_KEYS=gsk_a,gsk_b codelens-ai
+#
+# Semgrep needs more memory than small free plans give; add it with
+#   docker build --build-arg WITH_SEMGREP=true -t codelens-ai .
 
 # --- Frontend build -----------------------------------------------------------
 FROM node:20-slim AS frontend
@@ -34,8 +37,9 @@ ENV HOME=/home/user \
     PIP_NO_CACHE_DIR=1
 WORKDIR /home/user/app
 
+ARG WITH_SEMGREP=false
 COPY --chown=user requirements.txt requirements-analyzers.txt ./
-RUN pip install --user -r requirements.txt -r requirements-analyzers.txt
+RUN pip install --user -r requirements.txt     && if [ "$WITH_SEMGREP" = "true" ]; then pip install --user -r requirements-analyzers.txt; fi
 
 COPY --chown=user agents ./agents
 COPY --chown=user backend ./backend
@@ -49,4 +53,5 @@ ENV CODELENS_STATIC_DIR=/home/user/app/frontend/dist \
     CODELENS_UPLOAD_DIR=/home/user/app/uploads
 
 EXPOSE 7860
-CMD ["python", "-m", "uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "7860"]
+# Hosts such as Render choose the port through $PORT.
+CMD ["sh", "-c", "exec python -m uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-7860}"]
