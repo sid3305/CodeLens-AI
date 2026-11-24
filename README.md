@@ -85,6 +85,20 @@ cd frontend; npm run dev
 Open http://localhost:5173. The frontend expects the API at `http://127.0.0.1:8000` (override with
 `VITE_API_URL`).
 
+## Deploy (Docker / Hugging Face Spaces)
+
+The `Dockerfile` builds one container: the backend serves the built frontend on port 7860, with
+Git, Ruff, Bandit, Semgrep and Gitleaks included.
+
+```powershell
+docker build -t codelens-ai .
+docker run -p 7860:7860 -e GROQ_API_KEYS=gsk_a,gsk_b codelens-ai
+```
+
+On a Hugging Face Space (SDK: Docker), add `GROQ_API_KEYS` (or `GROQ_API_KEY`) under
+*Settings → Variables and secrets* as a **secret**. Imported repositories are kept inside the
+container, so they are lost when the Space restarts or sleeps.
+
 ## Supported import links
 
 Links to repositories on GitHub, GitLab, Bitbucket, Codeberg and other Gitea hosts:

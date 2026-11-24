@@ -19,7 +19,9 @@ import type {
 // Re-exported so existing imports from the API module keep working.
 export type * from '../types'
 
-const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000'}/api`
+// A production build is served by the backend itself (same origin); the dev
+// server talks to the backend on port 8000 unless VITE_API_URL says otherwise.
+const API_BASE_URL = `${import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : 'http://127.0.0.1:8000')}/api`
 
 export class ApiError extends Error {
   readonly status: number

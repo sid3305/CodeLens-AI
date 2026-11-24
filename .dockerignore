@@ -1,0 +1,15 @@
+.git
+.env
+.env.*
+!.env.example
+.review-scratch
+.ruff_cache
+.pytest_cache
+.coverage
+**/__pycache__
+uploads
+venv
+.venv
+frontend/node_modules
+frontend/dist
+frontend/coverage
