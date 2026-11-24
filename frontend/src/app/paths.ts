@@ -18,7 +18,7 @@ export const paths = {
 /** The section a pathname shows, or null outside a repository. */
 export function sectionFromPath(pathname: string): WorkspaceSection | null {
   const segment = pathname.split('/')[3]
-  if (segment === 'overview' || segment === 'architecture' || segment === 'issues') return segment
+  if (segment === 'overview' || segment === 'architecture' || segment === 'issues' || segment === 'chat') return segment
   if (segment === 'files') return 'file-preview'
   return null
 }

@@ -4,6 +4,7 @@ import { api } from '../services/api'
 import type {
   AiConsent,
   AiEstimateQuery,
+  ChatHistory,
   ExplainResponse,
   FindingAiMode,
   FindingAiResponse,
@@ -192,6 +193,37 @@ export function useFindingAi(repoId: string, findingId: string) {
     mutationFn: (mode: FindingAiMode) => api.findingAi(repoId, findingId, mode),
     retry: false,
     onSuccess: (answer, mode) => client.setQueryData(queryKeys.findingAi(repoId, findingId, mode), answer),
+  })
+}
+
+/** The repository chat history (reading never calls the AI). */
+export function useChat(repoId: string) {
+  return useQuery({
+    queryKey: queryKeys.chat(repoId),
+    queryFn: ({ signal }) => api.getChat(repoId, signal),
+    select: (history) => history.messages,
+  })
+}
+
+/** Asks the repository chat. Never retried; both messages are added to the history. */
+export function useAskChat(repoId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (question: string) => api.askChat(repoId, question),
+    retry: false,
+    onSuccess: ({ question, answer }) =>
+      client.setQueryData<ChatHistory>(queryKeys.chat(repoId), (current) => ({
+        repository_id: repoId,
+        messages: [...(current?.messages ?? []), question, answer],
+      })),
+  })
+}
+
+export function useClearChat(repoId: string) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.clearChat(repoId),
+    onSuccess: (history) => client.setQueryData(queryKeys.chat(repoId), history),
   })
 }
 

@@ -28,6 +28,7 @@ class AiConsentResponse(BaseModel):
     model: str
     configured: bool
     problem: str | None = None
+    keys: int = Field(0, description="Groq API keys in the pool (0 for other providers)")
 
 
 class FindingAiRequest(BaseModel):
@@ -91,3 +92,40 @@ class ExplainResponse(BaseModel):
     explanation: str
     generated_at: str
     truncated: bool = False
+
+
+MAX_QUESTION_CHARS = 1000
+
+
+class ChatRequest(BaseModel):
+    """A question about the repository (the conversation so far is stored on the server)."""
+    question: str = Field(..., min_length=1, max_length=MAX_QUESTION_CHARS)
+    force: bool = Field(False, description="Ask again instead of using a saved answer")
+
+
+class ChatSource(BaseModel):
+    """A code excerpt that was sent with the question."""
+    file: str
+    start_line: int
+    end_line: int
+
+
+class ChatMessage(BaseModel):
+    id: str
+    role: Literal["user", "assistant"]
+    content: str
+    created_at: str
+    sources: list[ChatSource] = []
+    input_tokens: int | None = None
+    cached: bool = False
+
+
+class ChatHistoryResponse(BaseModel):
+    repository_id: str
+    messages: list[ChatMessage]
+
+
+class ChatResponse(BaseModel):
+    repository_id: str
+    question: ChatMessage
+    answer: ChatMessage

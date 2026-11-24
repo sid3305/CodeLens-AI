@@ -36,7 +36,7 @@ describe('Sidebar navigation (A10)', () => {
       .getAllByRole('link')
       .map((link) => link.textContent?.trim())
 
-    expect(labels).toEqual(['Overview', 'Architecture', 'Issues'])
+    expect(labels).toEqual(['Overview', 'Architecture', 'Issues', 'Ask AI'])
   })
 
   it('has no controls without behaviour', () => {

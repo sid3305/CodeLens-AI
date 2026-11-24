@@ -4,6 +4,7 @@ import {
   ChevronRight,
   FolderGit2,
   LayoutDashboard,
+  MessagesSquare,
   Network,
   Search,
   Trash2,
@@ -54,6 +55,7 @@ const navigation = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'architecture', label: 'Architecture', icon: Network },
   { id: 'issues', label: 'Issues', icon: Bug },
+  { id: 'chat', label: 'Ask AI', icon: MessagesSquare },
 ] as const
 
 export default function Sidebar({

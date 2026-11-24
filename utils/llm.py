@@ -7,7 +7,8 @@ an ``AIServiceError`` whose message is safe to show to a user: no raw
 provider JSON, no key fragments, no local paths.
 
 Providers are chosen with ``CODELENS_LLM_PROVIDER``:
-- ``groq`` (default): ``GROQ_API_KEY``, model ``CODELENS_GROQ_MODEL``.
+- ``groq`` (default): ``GROQ_API_KEY`` and/or a pool in ``GROQ_API_KEYS``
+  (rotated per request, see utils/groq_keys.py), model ``CODELENS_GROQ_MODEL``.
 - ``ollama``: a local Ollama server at ``OLLAMA_BASE_URL``
   (default http://localhost:11434), model ``CODELENS_OLLAMA_MODEL``.
 """
@@ -23,6 +24,7 @@ from groq import Groq
 
 # Importing config loads the project's .env file.
 import utils.config  # noqa: F401
+from utils.groq_keys import get_pool, retry_after_seconds
 from utils.security import redact_secrets
 from utils.token_budget import LlmRequest, check, max_input_tokens, max_output_tokens
 
@@ -61,29 +63,71 @@ def _status_code(error: Exception) -> int | None:
 
 
 class GroqProvider:
+    """
+    Groq with a pool of API keys (GROQ_API_KEYS and/or GROQ_API_KEY).
+    A key that is rate-limited or rejected is set aside and the same request
+    goes to the next key; any other failure is reported at once.
+    """
+
     name = "Groq"
 
     def __init__(self):
         self.model = os.getenv("CODELENS_GROQ_MODEL") or MODEL_NAME
-        self._api_key = os.getenv("GROQ_API_KEY") or ""
-        self.configured = bool(self._api_key)
+        self._pool = get_pool()
+        self.configured = len(self._pool) > 0
+
+    @property
+    def key_count(self) -> int:
+        return len(self._pool)
 
     def complete(self, messages, max_tokens):
         if not self.configured:
             raise AINotConfiguredError(
-                "AI is not set up: add GROQ_API_KEY to .env and restart the backend."
+                "AI is not set up: add GROQ_API_KEY (or several keys in GROQ_API_KEYS) to .env "
+                "and restart the backend."
             )
-        try:
-            client = Groq(api_key=self._api_key)
-            response = client.chat.completions.create(
-                model=self.model, messages=messages, max_tokens=max_tokens, temperature=0,
-                **({"reasoning_effort": "low"} if is_reasoning_model(self.model) else {}),
-            )
-            return response.choices[0].message.content or ""
-        except AIServiceError:
-            raise
-        except Exception as error:  # noqa: BLE001 - every provider failure is mapped
-            raise self._clean(error) from None
+        tried: set[int] = set()
+        last: AIServiceError | None = None
+        while True:
+            index = self._pool.acquire(skip=tried)
+            if index is None:
+                raise last or self._all_resting()
+            tried.add(index)
+            try:
+                client = Groq(api_key=self._pool.keys[index])
+                response = client.chat.completions.create(
+                    model=self.model, messages=messages, max_tokens=max_tokens, temperature=0,
+                    **({"reasoning_effort": "low"} if is_reasoning_model(self.model) else {}),
+                )
+                return response.choices[0].message.content or ""
+            except AIServiceError:
+                raise
+            except Exception as error:  # noqa: BLE001 - every provider failure is mapped
+                status = _status_code(error)
+                kind = type(error).__name__.lower()
+                if status == 429 or "ratelimit" in kind:
+                    # This key's per-minute limit: rest it and try the next key.
+                    self._pool.rest(index, retry_after_seconds(error))
+                    logger.warning("Groq key #%d is rate-limited; trying the next key", index + 1)
+                    last = self._clean(error)
+                    continue
+                if status in (401, 403) or "authentication" in kind or "permission" in kind:
+                    self._pool.reject(index)
+                    logger.warning("Groq rejected key #%d; it is not used again until restart", index + 1)
+                    last = self._clean(error)
+                    continue
+                raise self._clean(error) from None
+
+    def _all_resting(self) -> AIServiceError:
+        status = self._pool.status()
+        if status["rejected"] == status["total"]:
+            which = "the API key" if status["total"] == 1 else "every API key"
+            return AIServiceError(f"Groq rejected {which}. Check GROQ_API_KEY / GROQ_API_KEYS in .env.")
+        wait = max(1, round(float(status["next_ready_seconds"])))
+        return AIServiceError(
+            f"All {status['total']} Groq key(s) reached their per-minute limit. "
+            f"Try again in about {wait} seconds, or add more keys to GROQ_API_KEYS."
+        )
 
     def _clean(self, error: Exception) -> AIServiceError:
         # Log the kind of failure only: provider messages can echo key fragments.
@@ -91,7 +135,7 @@ class GroqProvider:
         logger.warning("Groq request failed: %s (status %s)", type(error).__name__, status)
         kind = type(error).__name__.lower()
         if status == 401 or status == 403 or "authentication" in kind or "permission" in kind:
-            return AIServiceError("Groq rejected the API key. Check GROQ_API_KEY in .env.")
+            return AIServiceError("Groq rejected the API key. Check GROQ_API_KEY / GROQ_API_KEYS in .env.")
         if status == 413:
             return AIServiceError(
                 "Groq refused the request as too large for your plan's per-minute token limit. "
@@ -99,8 +143,8 @@ class GroqProvider:
             )
         if status == 429 or "ratelimit" in kind:
             return AIServiceError(
-                "Groq's per-minute limit was reached. Wait a minute, or lower "
-                f"CODELENS_LLM_MAX_INPUT_TOKENS (now {max_input_tokens()})."
+                "Groq's per-minute limit was reached on every key. Wait a minute, add more keys to "
+                f"GROQ_API_KEYS, or lower CODELENS_LLM_MAX_INPUT_TOKENS (now {max_input_tokens()})."
             )
         if isinstance(error, (ConnectionError, TimeoutError, OSError)) or "connection" in kind or "timeout" in kind:
             return AIServiceError("Could not reach Groq. Check your connection and try again.")
@@ -190,15 +234,22 @@ def provider_info() -> dict[str, object]:
     try:
         provider = get_provider()
     except AINotConfiguredError as error:
-        return {"provider": "none", "model": "", "configured": False, "problem": str(error)}
-    return {"provider": provider.name, "model": provider.model, "configured": provider.configured, "problem": None}
+        return {"provider": "none", "model": "", "configured": False, "problem": str(error), "keys": 0}
+    return {
+        "provider": provider.name,
+        "model": provider.model,
+        "configured": provider.configured,
+        "problem": None,
+        "keys": getattr(provider, "key_count", 0),
+    }
 
 
 def call_llm(prompt: str, max_tokens: int | None = None, *, system: str | None = None) -> str:
     """
     The one way out. Every message is redacted, the token budget is checked
     before sending (TokenBudgetError, nothing sent), and the answer length
-    is capped at CODELENS_LLM_MAX_OUTPUT_TOKENS. Never retried.
+    is capped at CODELENS_LLM_MAX_OUTPUT_TOKENS. Never retried on the same
+    key: only a rate-limited or rejected Groq key hands it to the next key.
     """
 
     request = LlmRequest(

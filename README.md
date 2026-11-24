@@ -22,12 +22,15 @@ code or findings. It runs on your machine and is meant for `localhost` use.
 
 - **AI is off for every repository** until you click *Allow AI for this repository*. Every AI button
   says what will be sent and to which provider and model. Nothing is sent automatically, and AI
-  calls are never retried.
+  calls are never retried on the same key.
 - **What can be sent:**
   - Explain this file: the file, up to 12,000 characters.
   - Explain selection: only the selected lines, at most 60.
   - Explain finding / Suggest fix: rule id, message, path and at most 11 lines around it.
   - Summary: a fact sheet (languages, dependencies, structure, top findings, README start, signatures), not full source.
+  - Ask AI (repository chat): your question, the last few messages, a short fact sheet and up to 3 code
+    excerpts of about 40 lines from the files most related to the question (found locally by matching
+    words in paths and code).
 - **Never sent, listed or previewed:**
   - `.env*`, `.npmrc`, `.pypirc`, `.netrc`, `.git-credentials`, `.htpasswd`, `.pgpass`
   - `*.pem`, `*.key`, `*.p12`, `*.pfx`, `*.jks`, `*.keystore`
@@ -38,9 +41,13 @@ code or findings. It runs on your machine and is meant for `localhost` use.
 - **Token budget:** every request is counted before it is sent (about 4 characters per token).
   The defaults are 3,000 input and 700 output tokens, which fit the smallest free tiers. Change them with
   `CODELENS_LLM_MAX_INPUT_TOKENS` and `CODELENS_LLM_MAX_OUTPUT_TOKENS`. Over-budget requests are trimmed or refused
-  locally, and a provider's 413/429 is never retried.
+  locally. A provider's 413 is never retried; a 429 only moves the request to the next key in the pool.
 - **Providers:** Groq (hosted) or Ollama (runs locally, so code stays on your machine). Errors shown
   to you never contain provider output, keys or local paths.
+- **Several Groq keys:** put them in `GROQ_API_KEYS`, separated by commas. Requests use the keys in
+  turn. A key that hits its per-minute limit rests until its limit resets (Groq's `retry-after`) and the
+  request goes to the next key. A key Groq rejects is skipped until the backend restarts. Keys are
+  never logged; only their position (#1, #2...) is.
 
 ## Install (Windows)
 

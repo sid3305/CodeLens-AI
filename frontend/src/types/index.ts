@@ -4,6 +4,7 @@ export type WorkspaceSection =
   | 'overview'
   | 'architecture'
   | 'issues'
+  | 'chat'
   | 'file-preview'
 
 /** Shapes returned by the backend API. This file is the single source of truth. */
@@ -89,6 +90,36 @@ export interface AiConsent {
   /** False until the provider is set up (e.g. GROQ_API_KEY). */
   configured: boolean
   problem: string | null
+  /** Groq API keys in the pool (0 for other providers). */
+  keys?: number
+}
+
+export interface ChatSource {
+  file: string
+  start_line: number
+  end_line: number
+}
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  created_at: string
+  /** Code excerpts sent with the question (assistant messages). */
+  sources: ChatSource[]
+  input_tokens: number | null
+  cached: boolean
+}
+
+export interface ChatHistory {
+  repository_id: string
+  messages: ChatMessage[]
+}
+
+export interface ChatResponse {
+  repository_id: string
+  question: ChatMessage
+  answer: ChatMessage
 }
 
 export interface RepositoryFile {

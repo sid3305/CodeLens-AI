@@ -2,6 +2,8 @@ import type {
   AiConsent,
   AiEstimate,
   AiEstimateQuery,
+  ChatHistory,
+  ChatResponse,
   FindingAiMode,
   FindingAiResponse,
   Job,
@@ -172,6 +174,14 @@ export const api = {
   /** `force` asks again instead of returning the saved answer (Regenerate). */
   explainFile: (repoId: string, filePath: string, force = false) =>
     request<ExplainResponse>(`${repo(repoId)}/files/explain`, json({ file_path: filePath, force })),
+
+  /** The repository chat so far (never calls the AI). */
+  getChat: (repoId: string, signal?: AbortSignal) => request<ChatHistory>(`${repo(repoId)}/chat`, { signal }),
+
+  /** Sends the question, recent messages, a fact sheet and related code excerpts to the AI. */
+  askChat: (repoId: string, question: string) => request<ChatResponse>(`${repo(repoId)}/chat`, json({ question })),
+
+  clearChat: (repoId: string) => request<ChatHistory>(`${repo(repoId)}/chat`, { method: 'DELETE' }),
 
   /** C5: sends only lines start..end of the file to the AI. */
   explainSelection: (repoId: string, filePath: string, start: number, end: number) =>

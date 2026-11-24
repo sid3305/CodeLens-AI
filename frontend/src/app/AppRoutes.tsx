@@ -18,6 +18,7 @@ import { useRepositoryContext, useShell, type RepositoryContext } from './shellC
 const OverviewPage = lazy(() => import('../pages/OverviewPage'))
 const ArchitecturePage = lazy(() => import('../pages/ArchitecturePage'))
 const IssuesPage = lazy(() => import('../pages/IssuesPage'))
+const ChatPage = lazy(() => import('../pages/ChatPage'))
 const FilePreviewPage = lazy(() => import('../pages/FilePreviewPage'))
 const WelcomePage = lazy(() => import('../pages/WelcomePage'))
 
@@ -117,6 +118,18 @@ function IssuesRoute() {
   )
 }
 
+function ChatRoute() {
+  const { repository, onOpenFile } = useRepositoryContext()
+  useDocumentTitle('Ask AI', repository.name)
+  return (
+    <ChatPage
+      key={repository.id}
+      repository={repository}
+      onOpenFile={(path, line) => onOpenFile(repository.id, path, line)}
+    />
+  )
+}
+
 function FileRoute() {
   const { repository } = useRepositoryContext()
   const navigate = useNavigate()
@@ -147,6 +160,7 @@ export default function AppRoutes() {
           <Route path="overview" element={<OverviewRoute />} />
           <Route path="architecture" element={<ArchitectureRoute />} />
           <Route path="issues" element={<IssuesRoute />} />
+          <Route path="chat" element={<ChatRoute />} />
           <Route path="files/*" element={<FileRoute />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

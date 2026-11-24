@@ -5,8 +5,8 @@ import type { AiEstimateQuery } from '../../types'
 import { errorMessage } from '../../services/api'
 import { Button, InlineMessage } from '../ui'
 
-const recipient = (provider: string, model: string) =>
-  `${provider} (${model})${provider === 'Ollama' ? ' on this machine' : ''}`
+const recipient = (provider: string, model: string, keys = 0) =>
+  `${provider} (${model}${keys > 1 ? `, ${keys} keys in rotation` : ''})${provider === 'Ollama' ? ' on this machine' : ''}`
 
 /**
  * The visible note next to every AI action (B6): AI is off per repository
@@ -47,7 +47,7 @@ export default function AiConsentNotice({
     )
   }
 
-  const to = recipient(data.provider, data.model)
+  const to = recipient(data.provider, data.model, data.keys)
 
   if (!data.enabled) {
     return (

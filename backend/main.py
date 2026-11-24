@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from backend.routers import ai, analysis, dependencies, export, jobs, repositories
+from backend.routers import ai, analysis, chat, dependencies, export, jobs, repositories
 from backend.services.repository_service import sweep_orphan_workspaces
 
 logger = logging.getLogger("codelens")
@@ -64,6 +64,7 @@ async def handle_unexpected_error(request: Request, error: Exception):
 app.include_router(repositories.router)
 app.include_router(analysis.router)
 app.include_router(ai.router)
+app.include_router(chat.router)
 app.include_router(dependencies.router)
 app.include_router(jobs.router)
 app.include_router(export.router)

@@ -29,6 +29,7 @@ const SECTION_TITLES: Record<WorkspaceSection, string> = {
   overview: 'Overview',
   architecture: 'Architecture',
   issues: 'Issues',
+  chat: 'Ask AI',
   'file-preview': 'File preview',
 }
 

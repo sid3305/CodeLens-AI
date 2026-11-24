@@ -298,9 +298,10 @@ class _ProviderFailure(Exception):
 @pytest.mark.parametrize(
     ("failure", "expected"),
     [
-        (_ProviderFailure(RAW_AUTH, 401), "Groq rejected the API key. Check GROQ_API_KEY in .env."),
+        (_ProviderFailure(RAW_AUTH, 401), "Groq rejected the API key. Check GROQ_API_KEY / GROQ_API_KEYS in .env."),
         (_ProviderFailure("Error code: 429 - {'error': 'slow down'}", 429),
-         "Groq's per-minute limit was reached. Wait a minute, or lower CODELENS_LLM_MAX_INPUT_TOKENS (now 3000)."),
+         ("Groq's per-minute limit was reached on every key. Wait a minute, add more keys to GROQ_API_KEYS, "
+          "or lower CODELENS_LLM_MAX_INPUT_TOKENS (now 3000).")),
         (ConnectionError("connection to api.groq.com failed"), "Could not reach Groq. Check your connection and try again."),
         (_ProviderFailure("Error code: 500 - {'error': 'internal'}", 500), "Groq returned an error. Try again later."),
         (_ProviderFailure("Error code: 413 - {'error': 'Request too large'}", 413),
@@ -347,7 +348,7 @@ def test_routes_return_only_the_clean_message(client, monkeypatch, upload_root):
     for response in (_summary(client, repo), _explain(client, repo)):
         assert response.status_code == 502
         detail = response.json()["detail"]
-        assert detail == "Groq rejected the API key. Check GROQ_API_KEY in .env."
+        assert detail == "Groq rejected the API key. Check GROQ_API_KEY / GROQ_API_KEYS in .env."
         for leak in ("gsk_", "{", "invalid_request_error", str(upload_root)):
             assert leak not in detail
 
@@ -359,7 +360,9 @@ def test_missing_key_is_a_clear_503(client):
     response = _explain(client, repo)
 
     assert response.status_code == 503
-    assert response.json()["detail"] == "AI is not set up: add GROQ_API_KEY to .env and restart the backend."
+    assert response.json()["detail"] == (
+        "AI is not set up: add GROQ_API_KEY (or several keys in GROQ_API_KEYS) to .env and restart the backend."
+    )
 
 
 # --- Explain selection (C5) -------------------------------------------------------------

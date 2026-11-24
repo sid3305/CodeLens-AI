@@ -27,9 +27,13 @@ class _NoLiveGroq:
 
 @pytest.fixture(autouse=True)
 def _block_live_llm(monkeypatch):
+    import utils.groq_keys
     import utils.llm
 
+    # A fresh key pool per test: no rested or rejected keys carry over.
+    monkeypatch.setattr(utils.groq_keys, "_pool", None)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEYS", raising=False)
     monkeypatch.setattr(utils.llm, "Groq", _NoLiveGroq)
 
 
@@ -62,11 +66,13 @@ class FakeLLM:
 def fake_llm(monkeypatch):
     fake = FakeLLM()
 
+    import agents.chat_agent
     import agents.explain_agent
     import agents.finding_agent
     import agents.repo_agent
 
     monkeypatch.setattr(agents.repo_agent, "call_llm", fake)
+    monkeypatch.setattr(agents.chat_agent, "call_llm", fake)
     monkeypatch.setattr(agents.explain_agent, "call_llm", fake)
     monkeypatch.setattr(agents.finding_agent, "call_llm", fake)
     return fake
