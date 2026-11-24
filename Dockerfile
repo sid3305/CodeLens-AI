@@ -9,7 +9,7 @@
 #   docker build --build-arg WITH_SEMGREP=true -t codelens-ai .
 
 # --- Frontend build -----------------------------------------------------------
-FROM node:20-slim AS frontend
+FROM node:24-slim AS frontend
 WORKDIR /src/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci --no-audit --no-fund
